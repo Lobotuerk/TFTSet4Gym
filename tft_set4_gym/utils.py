@@ -1,8 +1,8 @@
-import Simulator.config as config
+from . import config as config
 import numpy as np
 from functools import wraps
 from time import time
-from Simulator.stats import COST
+from .stats import COST
 
 
 

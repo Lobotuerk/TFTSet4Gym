@@ -1,9 +1,9 @@
 import collections
 import numpy as np
 import config
-from Simulator.stats import COST
-from Simulator.origin_class import team_traits, game_comp_tiers
-import Simulator.utils as utils
+from .stats import COST
+from .origin_class import team_traits, game_comp_tiers
+from . import utils as utils
 
 '''
 Includes the vector of the shop, bench, board, and item list.

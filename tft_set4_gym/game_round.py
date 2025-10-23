@@ -1,10 +1,10 @@
-import Simulator.config as config
+from . import config as config
 import time
 import random
 import numpy as np
-from Simulator import champion, pool_stats, minion
-from Simulator.item_stats import item_builds as full_items, starting_items
-from Simulator.champion_functions import MILLIS
+from . import champion, pool_stats, minion
+from .item_stats import item_builds as full_items, starting_items
+from .champion_functions import MILLIS
 
 
 class Game_Round:

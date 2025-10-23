@@ -1,6 +1,6 @@
-import Simulator.stats as stats
-import Simulator.field as field
-import Simulator.origin_class_stats as origin_class_stats
+from . import stats as stats
+from . import field as field
+from . import origin_class_stats as origin_class_stats
 import random
 
 

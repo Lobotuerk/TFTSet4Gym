@@ -3,11 +3,11 @@ import functools
 import gymnasium as gym
 import numpy as np
 from gymnasium.spaces import MultiDiscrete, Box, Dict, Tuple
-from Simulator import pool
-from Simulator.player import Player as player_class
-from Simulator.step_function import Step_Function
-from Simulator.game_round import Game_Round
-from Simulator.observation import Observation
+from . import pool
+from .player import Player as player_class
+from .step_function import Step_Function
+from .game_round import Game_Round
+from .observation import Observation
 from pettingzoo.utils.env import AECEnv
 from pettingzoo.utils import wrappers
 from pettingzoo.utils import AgentSelector

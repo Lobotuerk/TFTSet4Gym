@@ -2,15 +2,15 @@ import math
 import time
 import numpy as np
 import random
-from Simulator import champion, origin_class
-import Simulator.utils as utils
-import Simulator.config as config
-from Simulator.item_stats import basic_items, item_builds, thieves_gloves_items, \
+from . import champion, origin_class
+from . import utils as utils
+from . import config as config
+from .item_stats import basic_items, item_builds, thieves_gloves_items, \
     starting_items, trait_items, uncraftable_items
 
-from Simulator.stats import COST
-from Simulator.pool_stats import cost_star_values
-from Simulator.origin_class_stats import tiers, fortune_returns
+from .stats import COST
+from .pool_stats import cost_star_values
+from .origin_class_stats import tiers, fortune_returns
 from math import floor
 from config import DEBUG
 

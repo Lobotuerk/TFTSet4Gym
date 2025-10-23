@@ -1,5 +1,5 @@
 import config
-from Simulator.item_stats import uncraftable_items
+from .item_stats import uncraftable_items
 
 CHAMPION_INFORMATION = 12
 BOARD_SIZE = 28

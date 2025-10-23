@@ -1,10 +1,10 @@
-import Simulator.config as config
-import Simulator.stats as stats
-import Simulator.field as field
-import Simulator.champion_functions as champion_functions
-import Simulator.item_stats as item_stats
-import Simulator.origin_class as origin_class
-import Simulator.items as items
+from . import config as config
+from . import stats as stats
+from . import field as field
+from . import champion_functions as champion_functions
+from . import item_stats as item_stats
+from . import origin_class as origin_class
+from . import items as items
 import random
 from math import ceil, floor
 

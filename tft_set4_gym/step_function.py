@@ -1,7 +1,7 @@
-import Simulator.config as config
+from . import config as config
 import numpy as np
-import Simulator.champion as champion
-from Simulator.stats import COST
+from . import champion as champion
+from .stats import COST
 
 """
 Description - Object used for the simulation to interact with the environment. The agent passes in actions and those 

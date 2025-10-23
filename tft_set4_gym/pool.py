@@ -1,9 +1,9 @@
-import Simulator.stats as stats
+from . import stats as stats
 import random
 
-from Simulator.pool_stats import *
-from Simulator.origin_class_stats import origin_class, chosen_exclude
-from Simulator.config import LOGMESSAGES
+from .pool_stats import *
+from .origin_class_stats import origin_class, chosen_exclude
+from .config import LOGMESSAGES
 
 
 class pool:
