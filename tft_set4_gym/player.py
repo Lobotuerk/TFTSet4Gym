@@ -12,7 +12,7 @@ from .stats import COST
 from .pool_stats import cost_star_values
 from .origin_class_stats import tiers, fortune_returns
 from math import floor
-from config import DEBUG
+from . import config
 
 def null_encode(champ_object):
     return None
@@ -352,7 +352,7 @@ class Player:
         golden, triple_success = self.update_triple_catalog(a_champion)
         if not triple_success:
             self.print("Could not update triple catalog for champion " + a_champion.name)
-            if DEBUG:
+            if config.DEBUG:
                 print("Could not update triple catalog for champion " + a_champion.name)
             return False
         if golden:
@@ -361,7 +361,7 @@ class Player:
             self.sell_champion(a_champion, field=False)
             if not from_carousel:
                 self.reward += self.mistake_reward
-                if DEBUG:
+                if config.DEBUG:
                     print("Trying to buy a unit with bench full")
                 return False
             return True
@@ -393,7 +393,7 @@ class Player:
     def add_to_item_bench(self, item):
         if self.item_bench_full(1):
             self.reward += self.mistake_reward
-            if DEBUG:
+            if config.DEBUG:
                 print("Failed to add item to item bench")
             return False
         bench_loc = self.item_bench_vacancy()
@@ -438,7 +438,7 @@ class Player:
     def buy_champion(self, a_champion):
         if cost_star_values[a_champion.cost - 1][a_champion.stars - 1] > self.gold or a_champion.cost == 0:
             self.reward += self.mistake_reward
-            if DEBUG:
+            if config.DEBUG:
                 print("No gold to buy champion ", a_champion.name, " from shop ", self.shop_elems)
             return False
         self.gold -= cost_star_values[a_champion.cost - 1][a_champion.stars - 1]
@@ -471,7 +471,7 @@ class Player:
         if self.gold < self.exp_cost or self.level == self.max_level:
             self.reward += self.mistake_reward
             self.decision_mask[4] = 0
-            if DEBUG:
+            if config.DEBUG:
                 print(f"Did not have gold to buy exp, had {self.gold}, needed {self.exp_cost}, was level {self.level}, mask {self.decision_mask[4]}")
             return False
         self.gold -= 4
@@ -958,7 +958,7 @@ class Player:
                         m_champion.y = -1
                         self.print("Failed to move {} from bench {} to board [{}, {}]"
                                    .format(self.bench[bench_x].name, bench_x, board_x, board_y))
-                        if DEBUG:
+                        if config.DEBUG:
                             print("Failed to move {} from bench {} to board [{}, {}]"
                                   .format(self.bench[bench_x].name, bench_x, board_x, board_y))
                         return False
@@ -980,7 +980,7 @@ class Player:
                 self.update_team_tiers()
                 return True
         self.reward += self.mistake_reward
-        if DEBUG:
+        if config.DEBUG:
             print(f"Outside board range, bench: {self.bench[bench_x]}, board: {self.board[board_x][board_y]}, \
                   bench_x: {bench_x}, board_x: {board_x}, board_y: {board_y}, util_mask: {self.util_mask[0]}, \
                   with units in play {self.num_units_in_play} and max units {self.max_units}")
@@ -999,7 +999,7 @@ class Player:
                 if self.board[x][y]:
                     if not self.sell_champion(self.board[x][y], field=True):
                         self.print("Failed to sell {} from board [{}, {}]".format(self.board[x][y].name, x, y))
-                        if DEBUG:
+                        if config.DEBUG:
                             print("Failed to sell {} from board [{}, {}]".format(self.board[x][y].name, x, y))
                         return False
                     self.print("sold from board [{}, {}]".format(x, y))
@@ -1007,7 +1007,7 @@ class Player:
                     self.update_team_tiers()
                     return True
                 self.reward += self.mistake_reward
-                if DEBUG:
+                if config.DEBUG:
                     print("Unit not on board slot")
                 return False
             else:
@@ -1034,7 +1034,7 @@ class Player:
                     self.update_team_tiers()
                     return True
         self.reward += self.mistake_reward
-        if DEBUG:
+        if config.DEBUG:
             print(f"Move board to bench outside board limits: {x}, {y}")
         return False
 
@@ -1094,7 +1094,7 @@ class Player:
                 self.generate_board_vector()
                 return True
         self.reward += self.mistake_reward
-        if DEBUG:
+        if config.DEBUG:
             print("Outside board limits")
         return False
 
@@ -1123,7 +1123,7 @@ class Player:
                     self.generate_item_vector()
                     self.decide_vector_generation(board)
                     return True
-                if DEBUG:
+                if config.DEBUG:
                     print("Applying kayn item on not kayn")
                 return False
             if self.item_bench[xBench] == 'champion_duplicator':
@@ -1147,7 +1147,7 @@ class Player:
                         self.generate_item_vector()
                         self.decide_vector_generation(board)
                         return True
-                if DEBUG:
+                if config.DEBUG:
                     print("Applying magnetic remover to a champion with no items")
                 return False
             if self.item_bench[xBench] == 'reforger':
@@ -1161,7 +1161,7 @@ class Player:
                     self.generate_item_vector()
                     self.decide_vector_generation(board)
                     return True
-                if DEBUG:
+                if config.DEBUG:
                     print("Trying to add thieves gloves to unit with a separate item")
                 return False
             # TODO: Clean up this code, we already checked for thieves_glove by this point
@@ -1172,7 +1172,7 @@ class Player:
                     if self.item_bench[xBench] == name:
                         item_trait = list(trait_items.keys())[trait]
                         if item_trait in champ.origin:
-                            if DEBUG:
+                            if config.DEBUG:
                                 print("Trying to add trait item to unit with that trait")
                             return False
                         else:
@@ -1194,7 +1194,7 @@ class Player:
                             if item_names[item_index] == names:
                                 item_trait = list(trait_items.keys())[trait]
                                 if item_trait in champ.origin:
-                                    if DEBUG:
+                                    if config.DEBUG:
                                         print("trying to combine trait item to unit with that trait")
                                     return False
                                 else:
@@ -1202,7 +1202,7 @@ class Player:
                                     self.update_team_tiers()
                         if item_names[item_index] == "thieves_gloves":
                             if champ.num_items != 1:
-                                if DEBUG:
+                                if config.DEBUG:
                                     print("Trying to combine thieves gloves in unit with a separate item",  x, y)
                                 return False
                             else:
@@ -1241,7 +1241,7 @@ class Player:
                 return True
         # last case where 3 items but the last item is a basic item and the item to input is also a basic item
         self.reward += self.mistake_reward
-        if DEBUG:
+        if config.DEBUG:
             print(f"Failed to add item {self.item_bench[xBench]} in slot {xBench} to {champ} in {x}, {y}, item_mask: {self.item_mask}")
             if champ:
                 print(f'{champ} had {len(champ.items)} items')
@@ -1390,7 +1390,7 @@ class Player:
             self.generate_player_vector()
             return True
         self.reward += self.mistake_reward
-        if DEBUG:
+        if config.DEBUG:
             print("Could not refresh")
         return False
 
@@ -1428,7 +1428,7 @@ class Player:
                 self.bench[x].items = []
             self.generate_item_vector()
             return True
-        if DEBUG:
+        if config.DEBUG:
             print("No units at bench location {}".format(x))
         self.print("No units at bench location {}".format(x))
         return False
@@ -1467,14 +1467,14 @@ class Player:
                     self.print("returning " + str(a_champion.items[0]) + " to the item bench")
                 else:
                     self.print("Could not remove item {} from champion {}".format(a_champion.items, a_champion.name))
-                    if DEBUG:
+                    if config.DEBUG:
                         print("Could not remove item {} from champion {}".format(a_champion.items, a_champion.name))
                     return False
                 a_champion.items = []
                 self.generate_item_vector()
 
             return True
-        if DEBUG:
+        if config.DEBUG:
             print("Null champion")
         return False
 
@@ -1512,7 +1512,7 @@ class Player:
         self.print("could not find champion " + a_champion.name + " with star = "
                    + str(a_champion.stars) + " in the triple catelog")
         self.print("{}".format(self.triple_catalog))
-        if DEBUG:
+        if config.DEBUG:
             print("could not find champion " + a_champion.name + " with star = "
                   + str(a_champion.stars) + " in the triple catelog")
         return False
@@ -1558,7 +1558,7 @@ class Player:
                 s_champion.target_dummy):
             self.reward += self.mistake_reward
             self.print("Could not sell champion " + s_champion.name)
-            if DEBUG:
+            if config.DEBUG:
                 print("Could not sell champion " + s_champion.name)
             return False
         if not golden:
@@ -1600,7 +1600,7 @@ class Player:
                 self.print("Mistake in sell from bench with {} and level {}".format(self.bench[location],
                                                                                     self.bench[location].stars))
                 self.reward += self.mistake_reward
-                if DEBUG:
+                if config.DEBUG:
                     print("Could not remove from triple catalog or return item")
                 return False
             if not golden:
@@ -1617,7 +1617,7 @@ class Player:
             self.generate_item_vector()
             self.generate_player_vector()
             return return_champ
-        if DEBUG:
+        if config.DEBUG:
             print("Nothing at bench location")
         return False
 
@@ -1696,7 +1696,7 @@ class Player:
             self.bench[x].items.append(thieves_gloves_items[r2])
             return True
         else:
-            if DEBUG:
+            if config.DEBUG:
                 print("Could not assign thieves glove items")
             return False
 
@@ -1835,7 +1835,7 @@ class Player:
             self.generate_item_vector()
             self.decide_vector_generation(board)
             return True
-        if DEBUG:
+        if config.DEBUG:
             print("could not use reforge")
         return False
 

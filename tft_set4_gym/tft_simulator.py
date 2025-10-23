@@ -1,4 +1,4 @@
-import config
+from . import config
 import functools
 import gymnasium as gym
 import numpy as np

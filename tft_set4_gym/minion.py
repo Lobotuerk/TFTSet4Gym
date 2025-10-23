@@ -1,5 +1,4 @@
-import config
-from . import config as config
+from . import config
 from . import champion
 from .loot_orb import LootOrb, gen_loot, gen_orb_reward, gen_orbs, give_loot
 

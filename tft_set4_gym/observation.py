@@ -1,6 +1,6 @@
 import collections
 import numpy as np
-import config
+from . import config
 from .stats import COST
 from .origin_class import team_traits, game_comp_tiers
 from . import utils as utils

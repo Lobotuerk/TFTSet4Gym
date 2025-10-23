@@ -1,4 +1,3 @@
-import config
 from .item_stats import uncraftable_items
 
 CHAMPION_INFORMATION = 12
@@ -9,8 +8,15 @@ UNCRAFTABLE_ITEM = len(uncraftable_items)
 MAX_BENCH_SPACE = 10
 CHAMP_ENCODING_SIZE = 26
 
-NUM_PLAYERS = config.NUM_PLAYERS
-LOG_COMBAT = config.LOG_COMBAT
+# Default values that can be overridden by main project config
+NUM_PLAYERS = 8
+LOG_COMBAT = False
+DEBUG = False
+OBSERVATION_SIZE = 5152
+OBSERVATION_TIME_STEPS = 1
+OBSERVATION_TIME_STEP_INTERVAL = 1
+ACTION_DIM = [7, 37, 10]
+ACTIONS_PER_TURN = 10
 
 PRINTMESSAGES = True
 LOGMESSAGES = True
