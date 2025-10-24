@@ -16,7 +16,8 @@ class Game_Round:
             [15, 3],
             [21, 5],
             [27, 8],
-            [33, 25]
+            [33, 25],
+            [1000, 25]
         ]
         self.PLAYERS = game_players
         self.pool_obj = pool_obj
