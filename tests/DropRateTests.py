@@ -1,7 +1,11 @@
-# Description: This script will verify the drop rate of a shop 
-# by running the simulator 100000 times and counting the number of times
-# each champion is chosen.
+"""
+Test module for verifying champion drop rates in the TFT Set 4 Gym.
 
+This test will verify the drop rate of a shop by running the simulator 
+100000 times and counting the number of times each champion is chosen.
+"""
+
+import pytest
 import sys
 import os
 
@@ -29,7 +33,10 @@ CORRECT_DROP_RATES = [
 ]
 
 
-def verifyShopDropRate():
+@pytest.mark.droprate
+@pytest.mark.slow
+def test_shop_drop_rate():
+    """Test shop drop rates for each cost level."""
     # Create a player and pool
     pool1 = pool()
     player1 = Player(pool_pointer=pool1, player_num=1)
@@ -147,4 +154,11 @@ def verify(_pool, _player):
 
 
 def list_of_tests():
-    verifyShopDropRate()
+    """Legacy function for backward compatibility."""
+    test_shop_drop_rate()
+
+
+if __name__ == "__main__":
+    # Run tests when script is executed directly
+    test_shop_drop_rate()
+    print("All drop rate tests passed!")

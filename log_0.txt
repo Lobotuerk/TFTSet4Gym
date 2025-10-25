@@ -1,9 +1,0 @@
-Start of a new run
-0       1001100             Adding champion twistedfate with items ['needlessly_large_rod'] to bench                    
-1       1001100             Adding champion elise with items ['negatron_cloak'] to bench                                
-2       2002800             Adding champion elise with items ['giants_belt'] to bench                                   
-3       2002800             Adding champion twistedfate with items ['bf_sword'] to bench                                
-4       2002800             Adding champion vayne with items ['negatron_cloak'] to bench                                
-5       2002800             Adding champion fiora with items ['tear_of_the_goddess'] to bench                           
-6       2002800             Adding champion diana with items ['bf_sword'] to bench                                      
-7       2002800             Adding champion twistedfate with items ['bf_sword'] to bench                                

@@ -5,6 +5,7 @@ https://pettingzoo.farama.org/api/parallel/
 
 Tests all required methods, attributes, and behaviors for a valid parallel environment.
 """
+import pytest
 import sys
 import os
 
@@ -20,6 +21,7 @@ from pettingzoo.utils.env import ParallelEnv
 from tft_set4_gym.tft_simulator import parallel_env
 
 
+@pytest.mark.parallel
 class TestParallelEnvAPI:
     """Test that parallel_env conforms to PettingZoo parallel API specification."""
     
@@ -301,6 +303,8 @@ class TestParallelEnvAPI:
         env.close()
 
 
+@pytest.mark.parallel
+@pytest.mark.integration
 class TestPettingZooCompliance:
     """Test compliance with PettingZoo's built-in test suite."""
     
@@ -338,6 +342,7 @@ class TestPettingZooCompliance:
             env.close()
 
 
+@pytest.mark.parallel
 class TestEnvironmentRobustness:
     """Test environment robustness and edge cases."""
     

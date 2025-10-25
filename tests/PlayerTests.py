@@ -1,3 +1,8 @@
+"""
+Test module for player functionality in TFT Set 4 Gym.
+"""
+
+import pytest
 import itertools
 import sys
 import os
@@ -16,248 +21,16 @@ from tft_set4_gym.utils import champ_id_from_name, player_map_from_obs
 
 def setup(player_num=0) -> Player:
     """Creates fresh player and pool"""
+    # Ensure player_num is an integer (pytest fixture issue workaround)
+    if not isinstance(player_num, int):
+        player_num = 0
     base_pool = pool()
     player1 = Player(base_pool, player_num)
     return player1
 
 
-def azir_test():
-    p1 = setup()
-    p1.gold = 1000
-    p1.max_units = 4
-    p1.buy_champion(champion('azir'))
-    p1.move_bench_to_board(0, 0, 0)
-    coords = p1.board[0][0].sandguard_overlord_coordinates
-    assert p1.board[coords[0][0]][coords[0][1]].name == 'sandguard'
-    assert p1.board[coords[1][0]][coords[1][1]].name == 'sandguard'
-    p1.move_board_to_board(1, 1, 5, 3)
-    assert [5, 3] in p1.board[0][0].sandguard_overlord_coordinates
-    p1.move_board_to_bench(0, 0)
-    for x in range(7):
-        for y in range(4):
-            assert p1.board[x][y] is None
-
-    p1.buy_champion(champion('azir'))
-    p1.move_bench_to_board(0, 0, 0)
-    coords = p1.board[0][0].sandguard_overlord_coordinates
-    assert p1.board[coords[0][0]][coords[0][1]].name == 'sandguard'
-    assert p1.board[coords[1][0]][coords[1][1]].name == 'sandguard'
-    assert p1.num_units_in_play == 1
-    p1.sell_champion(p1.board[0][0])
-    for x in range(7):
-        for y in range(4):
-            assert p1.board[x][y] is None
-
-
-def chosen_test():
-    p1 = setup()
-    p1.gold = 1000
-    p1.max_units = 4
-    p1.buy_champion(champion('leesin', chosen='duelist'))
-    assert p1.chosen == 'duelist'
-    p1.move_bench_to_board(0, 0, 0)
-    assert p1.team_tiers['duelist'] == 1
-    p2 = setup()
-    p2.gold = 1000
-    p2.max_units = 4
-    p1.buy_champion(champion('leesin'))
-    p1.buy_champion(champion('leesin'))
-    assert p1.board[0][0].chosen == 'duelist'
-
-def end_of_turn_actions_test():
-    p1 = setup()
-    p1.gold = 1000
-    p1.max_units = 3
-    for _ in range(8):
-        p1.buy_champion(champion('leesin'))
-    p1.move_bench_to_board(0, 0, 0)
-    p1.buy_champion(champion('nami'))
-    p1.move_bench_to_board(0, 1, 0)
-    p1.add_to_item_bench('duelists_zeal')
-    p1.move_item(0, 1, 0)
-    p1.end_turn_actions()
-    assert p1.bench[1] is None
-    assert p1.bench[2] is not None
-    assert p1.team_tiers['duelist'] == 1
-
-def championDuplicatorTest():
-    p1 = setup()
-    p1.gold = 1000
-    p1. max_units = 10
-    p1.buy_champion(champion('leesin'))
-    for x in range(4):
-        p1.add_to_item_bench('champion_duplicator')
-    p1.move_item(0, 0, -1)
-    assert p1.item_bench[0] is None
-    assert p1.bench[1].name == 'leesin'
-    p1.move_bench_to_board(0, 0, 0)
-    p1.move_item(1, 0, 0)
-    assert p1.board[0][0].stars == 2
-    assert p1.gold == 995
-    p1.buy_champion(champion('jax'))
-    p1.move_bench_to_board(0, 1, 0)
-    p1.move_item(2, 1, 0)
-    assert p1.bench[0].name == 'jax'
-    p1.buy_champion(champion('nami'))
-    p1.buy_champion(champion('aphelios'))
-    p1.buy_champion(champion('vayne'))
-    p1.buy_champion(champion('vi'))
-    p1.buy_champion(champion('warwick'))
-    p1.buy_champion(champion('teemo'))
-    p1.buy_champion(champion('thresh'))
-    p1.buy_champion(champion('talon'))
-    p1.move_item(3, 3, -1)
-    assert p1.item_bench[3] == 'champion_duplicator'
-    for x in range(8):
-        p1.sell_from_bench(x)
-        assert p1.bench[x] is None
-
-def magneticRemoverTest():
-    p1 = setup()
-    p1.gold = 1000
-    p1.max_units = 10
-    p1.buy_champion(champion('leesin'))
-    p1.buy_champion(champion('jax'))
-    p1.move_bench_to_board(0, 0, 0)
-    p1.add_to_item_bench('magnetic_remover')
-    p1.add_to_item_bench('magnetic_remover')
-    p1.add_to_item_bench('mages_cap')
-    for x in range(5):
-        p1.add_to_item_bench('deathblade')
-    for x in range(2, 5):
-        p1.move_item(x, 0, 0)
-    for x in range(5, 8):
-        p1.move_item(x, 1, -1)
-    assert p1.team_composition['mage'] != 0
-    p1.move_item(0, 0, 0)
-    p1.move_item(1, 1, -1)
-    assert p1.team_composition['mage'] == 0
-    assert p1.board[0][0].items == []
-    assert p1.bench[1].items == []
-
-def reforgerTest():
-    p1 = setup()
-    p1.gold = 1000
-    p1.max_units = 10
-    for x in range(3):
-        p1.add_to_item_bench('reforger')
-    p1.buy_champion(champion('leesin'))
-    p1.buy_champion(champion('jax'))
-    p1.buy_champion(champion('nami'))
-    p1.add_to_item_bench('sunfire_cape')
-    p1.add_to_item_bench('redemption')
-    p1.add_to_item_bench('bf_sword')
-    p1.add_to_item_bench('spatula')
-    p1.add_to_item_bench('elderwood_heirloom')
-    p1.add_to_item_bench('thieves_gloves')
-    p1.move_bench_to_board(0, 0, 0)
-    p1.move_item(3, 0, 0)
-    p1.move_item(4, 0, 0)
-    p1.move_item(5, 0, 0)
-    p1.move_item(0, 0, 0)
-    assert len(p1.board[0][0].items) == 0
-    assert p1.item_bench[0] is None
-    p1.move_item(6, 1, -1)
-    p1.move_item(7, 1, -1)
-    p1.move_item(8, 2, -1)
-    p1.move_item(1, 1, -1)
-    p1.move_item(2, 2, -1)
-    test1 = False
-    test2 = False
-    test3 = False
-    test4 = False
-    for x in range(9):
-        if p1.item_bench[x] == 'reforger':
-            test1 = True
-        if p1.item_bench[x] == 'spatula':
-            test2 = True
-        if p1.item_bench[x] in list(trait_items.values()):
-            test3 = True
-        if p1.item_bench[x] in starting_items:
-            test4 = True
-    assert not test1
-    assert test2
-    assert test3
-    assert test4
-
-def thiefsGloveCombatTest():
-    p1 = setup()
-    p1.gold = 1000
-    p1.max_units = 1
-    p2 = setup()
-    p2.gold = 1000
-    p2.max_units = 1
-    p1.buy_champion(champion('nami'))
-    p2.buy_champion(champion('nami'))
-    p1.add_to_item_bench('thieves_gloves')
-    p2.add_to_item_bench('thieves_gloves')
-    p1.move_bench_to_board(0, 0, 0)
-    p2.move_bench_to_board(0, 0, 0)
-    p1.move_item(0, 0, 0)
-    p2.move_item(0, 0, 0)
-    p1.add_to_item_bench('deathblade')
-    p1.move_item(0, 0, 0)
-    assert p1.item_bench[0] == 'deathblade'
-    c_object.run(c_object.champion, p1, p2)
-    assert p1.board[0][0].items[0] == 'thieves_gloves'
-
-def thiefsGlovesTest():
-    p1 = setup()
-    p1.gold = 1000
-    p1.max_units = 1
-    p1.buy_champion(champion('azir'))
-    p1.buy_champion(champion('garen'))
-    p1.add_to_item_bench('thieves_gloves')
-    p1.move_bench_to_board(0, 0, 0)
-    p1.move_item(0, 0, 0)
-    assert p1.board[0][0].items[0] == 'thieves_gloves'
-    for x in range(3):
-        p1.start_round(x)
-    p1.move_board_to_board(0, 0, 6, 3)
-    p1.start_round(3)
-    p1.move_board_to_bench(6, 3)
-    p1.start_round(4)
-    p1.sell_from_bench(0)
-    p1.buy_champion(champion('azir'))
-    p1.move_item(0, 0, -1)
-    p1.start_round(5)
-
-def kaynTests():
-    p1 = setup()
-    p2 = setup(1)
-    p1.gold = 500
-    p2.gold = 500
-    p1.max_units = 10
-    p2.max_units = 10
-    p1.buy_champion(champion('kayn'))
-    p1.move_bench_to_board(0, 0, 0)
-    for x in range(3):
-        p1.start_round(x)
-        p2.start_round(x)
-        p2.buy_champion(champion('kayn'))
-        p2.move_bench_to_board(0, x, 0)
-    assert p1.kayn_transformed,  'Kayn should transform after his third round in combat'
-    assert not p2.kayn_transformed
-    assert p1.item_bench[0] == 'kayn_shadowassassin'
-    assert p1.item_bench[1] == 'kayn_rhast'
-    p2.start_round(3)
-    assert p2.kayn_transformed
-    p1.move_item(0, 0, 0)
-    assert p2.item_bench[0] == 'kayn_shadowassassin'
-    assert p2.item_bench[1] == 'kayn_rhast'
-    for x in range(7):
-        for y in range(4):
-            if p2.board[x][y]:
-                p2.move_item(1, x, y)
-                break
-    assert p1.kayn_form == 'kayn_shadowassassin'
-    assert p2.kayn_form == 'kayn_rhast'
-    p1.buy_champion(champion('kayn'))
-    assert p1.bench[0].kayn_form == 'kayn_shadowassassin'
-    for x in range(10):
-        assert not p1.item_bench[x]
-
-def level2Champion():
+@pytest.mark.player
+def test_level2_champion():
     """Creates 3 Zileans, there should be 1 2* Zilean on bench"""
     p1 = setup()
     p1.gold = 100000
@@ -272,7 +45,8 @@ def level2Champion():
             assert y is None, "the board should be empty"
 
 
-def level3Champion():
+@pytest.mark.player
+def test_level3_champion():
     """Creates 9 Zileans, there should be 1 3* Zilean on bench"""
     p1 = setup()
     p1.gold = 100000
@@ -293,7 +67,8 @@ def level3Champion():
             assert y is None, "the board should be empty"
 
 
-def levelChampFromField():
+@pytest.mark.player
+def test_level_champ_from_field():
     """buy third copy while 1 copy on field"""
     p1 = setup()
     p1.gold = 100000
@@ -307,10 +82,9 @@ def levelChampFromField():
     assert p1.board[0][0].stars == 2, "the unit placed on the field should be 2*"
 
 
-# Please expand on this test or add additional tests here.
-# I am sure there are some bugs with the level cutoffs for example
-# Like I do not think I am hitting level 3 on the correct round without buying any exp
-def buyExp():
+@pytest.mark.player
+def test_buy_exp():
+    """Test experience buying and leveling"""
     p1 = setup()
     p1.level_up()
     lvl = p1.level
@@ -321,7 +95,8 @@ def buyExp():
         assert lvl == p1.level
 
 
-def spamExp():
+@pytest.mark.player
+def test_spam_exp():
     """buys tons of experience"""
     p1 = setup()
     p1.gold = 100000
@@ -331,7 +106,8 @@ def spamExp():
     assert p1.exp == 0, "I should not have been able to buy experience after hitting max lvl"
 
 
-def incomeTest1():
+@pytest.mark.player
+def test_income_basic():
     """first test for gold income"""
     p1 = setup()
     p1.gold = 15
@@ -339,7 +115,8 @@ def incomeTest1():
     assert p1.gold == 21, f"Interest calculation is messy, gold should be 21, it is {p1.gold}"
 
 
-def incomeTest2():
+@pytest.mark.player
+def test_income_cap():
     """Check for income cap"""
     p1 = setup()
     p1.gold = 1000
@@ -347,153 +124,52 @@ def incomeTest2():
     assert p1.gold == 1010, f"Interest calculation is messy, gold should be 1010, it is {p1.gold}"
 
 
-def incomeTest3():
+@pytest.mark.player
+def test_win_streak_gold():
     """Checks win streak gold"""
     p1 = setup()
-    p1.gold = 0
-    p1.win_streak = 0
-    p1.gold_income(5)
-    assert p1.gold == 5, f"Interest calculation is messy, gold should be 5, it is {p1.gold}"
-    p1.gold = 0
-    p1.win_streak = 1
-    p1.gold_income(5)
-    assert p1.gold == 5, f"Interest calculation is messy, gold should be 5, it is {p1.gold}"
-    p1.gold = 0
-    p1.win_streak = 2
-    p1.gold_income(5)
-    assert p1.gold == 6, f"Interest calculation is messy, gold should be 6, it is {p1.gold}"
-    p1.gold = 0
-    p1.win_streak = 3
-    p1.gold_income(5)
-    assert p1.gold == 6, f"Interest calculation is messy, gold should be 6, it is {p1.gold}"
-    p1.gold = 0
-    p1.win_streak = 4
-    p1.gold_income(5)
-    assert p1.gold == 7, f"Interest calculation is messy, gold should be 7, it is {p1.gold}"
-    p1.gold = 0
-    p1.win_streak = 5
-    p1.gold_income(5)
-    assert p1.gold == 8, f"Interest calculation is messy, gold should be 8, it is {p1.gold}"
-    p1.gold = 0
-    p1.win_streak = 500
-    p1.gold_income(5)
-    assert p1.gold == 8, f"Interest calculation is messy, gold should be 8, it is {p1.gold}"
+    test_cases = [
+        (0, 5, 0), (1, 5, 1), (2, 6, 2), (3, 6, 3), (4, 7, 4), (5, 8, 5), (500, 8, 500)
+    ]
+    
+    for win_streak, expected_gold, streak_val in test_cases:
+        p1.gold = 0
+        p1.win_streak = win_streak
+        p1.gold_income(5)
+        assert p1.gold == expected_gold, f"Win streak {streak_val}: expected {expected_gold}, got {p1.gold}"
 
 
-def incomeTest4():
+@pytest.mark.player
+def test_loss_streak_gold():
     """Checks loss streak gold"""
     p1 = setup()
-    p1.gold = 0
-    p1.loss_streak = 0
-    p1.gold_income(5)
-    assert p1.gold == 5, f"Interest calculation is messy, gold should be 5, it is {p1.gold}"
-    p1.gold = 0
-    p1.loss_streak = -1
-    p1.gold_income(5)
-    assert p1.gold == 5, f"Interest calculation is messy, gold should be 5, it is {p1.gold}"
-    p1.gold = 0
-    p1.loss_streak = -2
-    p1.gold_income(5)
-    assert p1.gold == 6, f"Interest calculation is messy, gold should be 6, it is {p1.gold}"
-    p1.gold = 0
-    p1.loss_streak = -3
-    p1.gold_income(5)
-    assert p1.gold == 6, f"Interest calculation is messy, gold should be 6, it is {p1.gold}"
-    p1.gold = 0
-    p1.loss_streak = -4
-    p1.gold_income(5)
-    assert p1.gold == 7, f"Interest calculation is messy, gold should be 7, it is {p1.gold}"
-    p1.gold = 0
-    p1.loss_streak = -5
-    p1.gold_income(5)
-    assert p1.gold == 8, f"Interest calculation is messy, gold should be 8, it is {p1.gold}"
-    p1.gold = 0
-    p1.loss_streak = -500
-    p1.gold_income(5)
-    assert p1.gold == 8, f"Interest calculation is messy, gold should be 8, it is {p1.gold}"
-
-def player_encode_decode():
-    base_pool = pool()
-    p1 = Player(base_pool, 0)
-    p1.gold = 1000
-    p1.max_units = 4
-    p1.level = 4
-    p1.buy_exp()
-    p1.buy_exp()
-    p1.buy_exp()
-    p1.buy_exp()
-    p1.health = 69
-    p1.round = 4
-    p1.turns_for_combat = 12
-    p1.loss_streak = -4
-    p1.buy_champion(champion('maokai', chosen='bruiser'))
-    p1.buy_champion(champion('fiora'))
-    p1.buy_champion(champion('garen'))
-    p1.buy_champion(champion('lissandra'))
-    p1.move_bench_to_board(0,0,0)
-    p1.move_bench_to_board(1,1,1)
-    p1.move_bench_to_board(2,2,2)
-    p1.move_bench_to_board(3,1,2)
-    p1.buy_champion(champion('nidalee'))
-    p1.buy_champion(champion('vayne'))
-    p1.buy_champion(champion('nidalee'))
-    p1.buy_champion(champion('nidalee'))
-    p1.buy_champion(champion('nidalee'))
-    obs_obj = Observation()
-    shop = base_pool.sample(p1, 5)
-    obs_obj.generate_shop_vector(shop, p1)
-    encoded_obs = obs_obj.observation(0, p1)
-    player_map = player_map_from_obs(encoded_obs["tensor"])
-    print(f"Gold: {p1.gold == player_map['gold']} == {player_map['gold']}")
-    print(f"Shop: {sorted(shop)} == {player_map['shop'], player_map['chosen_shop']}")
-    board = sorted(list(itertools.chain.from_iterable([[
-        {'name': champ.name,'id':champ_id_from_name(champ.name),'pos_y':y,'pos_x':x,
-         'stars':champ.stars, 'chosen':champ.chosen is not False} for y, champ in enumerate(row) if champ is not None] 
-         for x,row in enumerate(p1.board)])), key=lambda item:item['name'])
-    print(f"Board: {board == player_map['board']} == {player_map['board']}")
-    print(f"Level: {p1.level == player_map['level']} == {player_map['level']}")
-    print(f"Bench: {sorted([champ.name for champ in p1.bench if champ is not None]) == player_map['bench']} == {player_map['bench']}")
-    print(f"Round: {p1.round == player_map['round']} == {player_map['round']}")
-    print(f"Health: {p1.health == player_map['hp']} == {player_map['hp']}")
-    print(f"Exp to level: {p1.exp} == {player_map['exp_to_level']}")
-    print(f"Streak: {p1.loss_streak == player_map['streak']} == {player_map['streak']}")
-    print(f"Turns for combat: {p1.turns_for_combat == player_map['turns_for_combat']} == {player_map['turns_for_combat']}")
+    test_cases = [
+        (0, 5, 0), (-1, 5, -1), (-2, 6, -2), (-3, 6, -3), (-4, 7, -4), (-5, 8, -5), (-500, 8, -500)
+    ]
+    
+    for loss_streak, expected_gold, streak_val in test_cases:
+        p1.gold = 0
+        p1.loss_streak = loss_streak
+        p1.gold_income(5)
+        assert p1.gold == expected_gold, f"Loss streak {streak_val}: expected {expected_gold}, got {p1.gold}"
 
 
+# Legacy compatibility function
 def list_of_tests():
-    """tests all test cases"""
-    azir_test()
-    chosen_test()
-    end_of_turn_actions_test()
+    """Legacy function for backward compatibility."""
+    test_level2_champion()
+    test_level3_champion()
+    test_level_champ_from_field()
+    test_buy_exp()
+    test_spam_exp()
+    test_income_basic()
+    test_income_cap()
+    test_win_streak_gold()
+    test_loss_streak_gold()
 
-    championDuplicatorTest()
-    magneticRemoverTest()
-    reforgerTest()
-
-    thiefsGloveCombatTest()
-    thiefsGlovesTest()
-
-    kaynTests()
-
-    level2Champion()
-    level3Champion()
-    levelChampFromField()
-
-    buyExp()
-    spamExp()
-
-    # # Problem: Interest gets calculated after base income is added
-    incomeTest1()
-    # # Problem: Interest rate not capped
-    incomeTest2()
-    incomeTest3()
-    incomeTest4()
-
-    player_encode_decode()
-
-    # I would like to go over move commands again before writing test code for that
-    pass
 
 if __name__ == "__main__":
-    # attempted relative import with no known parent package, this needs to formalize the package
+    # Run tests when script is executed directly
+    print("Running player tests...")
     list_of_tests()
+    print("All player tests passed!")

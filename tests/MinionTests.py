@@ -1,3 +1,8 @@
+"""
+Test module for minion combat and PVE rounds in TFT Set 4 Gym.
+"""
+
+import pytest
 import sys
 import os
 
@@ -19,7 +24,9 @@ def setup() -> Player:
     return player1
 
 # Check health calculation from minion combat
-def combatTest():
+@pytest.mark.minion
+def test_minion_combat():
+    """Test that player loses health from losing a PVE round."""
     p1 = setup()
     p1.gold = 10000
     p1.max_units = 100
@@ -27,8 +34,11 @@ def combatTest():
 
     assert p1.health < 100, "I didn't lose any health from losing a PVE round!"
 
+
 # test if each round is dropping rewards for the player
-def rewardsTest():
+@pytest.mark.minion
+def test_minion_rewards():
+    """Test that PVE rounds drop rewards for the player."""
     p1 = setup()
     # add 3* zilean and yone to board for combat
     p1.board[0][0] = champion("zilean", None, 0, 0, 3, None, None, None, False)
@@ -53,5 +63,13 @@ def emptyList(listArr):
     return True
 
 def list_of_tests():
-    combatTest()
-    rewardsTest()
+    """Legacy function for backward compatibility."""
+    test_minion_combat()
+    test_minion_rewards()
+
+
+if __name__ == "__main__":
+    # Run tests when script is executed directly
+    test_minion_combat()
+    test_minion_rewards()
+    print("All minion tests passed!")

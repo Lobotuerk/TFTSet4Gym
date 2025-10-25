@@ -3,6 +3,7 @@ Quick verification script to test the TFT PettingZoo environment
 before running Stable Baselines 3 training.
 """
 
+import pytest
 import sys
 import numpy as np
 import sys
@@ -14,6 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from tft_set4_gym.tft_simulator import parallel_env
 
 
+@pytest.mark.integration
 def test_basic_environment():
     """Test basic environment functionality."""
     print("🧪 Testing TFT PettingZoo Environment")
@@ -89,7 +91,8 @@ def test_basic_environment():
         return False
 
 
-def check_sb3_compatibility():
+@pytest.mark.integration 
+def test_sb3_compatibility():
     """Check if the environment is compatible with SB3 using our custom wrapper."""
     print("\n🔧 Testing SB3 Compatibility (Pure SB3 Approach)")
     print("=" * 50)
@@ -164,7 +167,7 @@ def main():
     basic_test = test_basic_environment()
     
     # Test SB3 compatibility
-    sb3_test = check_sb3_compatibility()
+    sb3_test = test_sb3_compatibility()
     
     print("\n" + "=" * 60)
     print("SUMMARY:")
@@ -178,6 +181,12 @@ def main():
         print("\n⚠️  Please fix the issues above before training.")
         if not sb3_test:
             print("Install dependencies: pip install -r requirements_sb3.txt")
+
+
+# Legacy compatibility functions
+def check_sb3_compatibility():
+    """Legacy function name for backward compatibility."""
+    return test_sb3_compatibility()
 
 
 if __name__ == "__main__":

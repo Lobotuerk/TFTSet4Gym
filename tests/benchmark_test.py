@@ -1,9 +1,9 @@
-#!/usr/bin/env python3
 """
 Benchmark tests for TFT Set 4 Gym environment.
 Measures performance metrics like initialization, reset, step times, and memory usage.
 """
 
+import pytest
 import time
 import sys
 import os
@@ -342,7 +342,9 @@ class EnvironmentBenchmark:
         print("=" * 80)
 
 
-def run_quick_benchmark():
+@pytest.mark.benchmark
+@pytest.mark.slow
+def test_quick_benchmark():
     """Run a quick benchmark with fewer iterations."""
     print("🚀 Running Quick Benchmark...")
     benchmark = EnvironmentBenchmark(num_iterations=10, num_steps_per_episode=20)
@@ -350,12 +352,24 @@ def run_quick_benchmark():
     benchmark.print_results()
 
 
-def run_comprehensive_benchmark():
+@pytest.mark.benchmark
+@pytest.mark.slow  
+def test_comprehensive_benchmark():
     """Run a comprehensive benchmark with more iterations."""
     print("🚀 Running Comprehensive Benchmark...")
     benchmark = EnvironmentBenchmark(num_iterations=100, num_steps_per_episode=50)
     benchmark.run_full_benchmark()
     benchmark.print_results()
+
+
+def run_quick_benchmark():
+    """Legacy function - Run a quick benchmark with fewer iterations."""
+    test_quick_benchmark()
+
+
+def run_comprehensive_benchmark():
+    """Legacy function - Run a comprehensive benchmark with more iterations."""
+    test_comprehensive_benchmark()
 
 
 if __name__ == "__main__":
