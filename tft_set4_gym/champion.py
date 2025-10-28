@@ -364,13 +364,22 @@ class champion:
 
     def enemy_team(self):
         enemy_team = 'red' if self.team == 'blue' else 'blue'
-        return eval(enemy_team)
+        try:
+            if enemy_team:
+                result = eval(enemy_team)
+                return result if result is not None else []
+            return []
+        except (TypeError, NameError):
+            return []
 
     def own_team(self):
         try:
-            return eval(self.team)
-        except TypeError:
-            return False
+            if self.team:
+                result = eval(self.team)
+                return result if result is not None else []
+            return []
+        except (TypeError, NameError):
+            return []
 
     def ability(self):
         attackable_enemies = list(filter(lambda x: (x.champion and x.health > 0), self.enemy_team()))
