@@ -14,6 +14,23 @@ from .origin_class_stats import tiers, fortune_returns
 from math import floor
 from . import config
 
+# Schema-based helper function
+def get_player_field_index(field_name, default_index):
+    """Get field index with fallback for backward compatibility."""
+    try:
+        from .observation_schema import get_field_indices
+        start, end = get_field_indices(field_name)
+        return start
+    except (ImportError, KeyError):
+        # Fallback to hardcoded values
+        hardcoded_map = {
+            'health': 60 + 58,
+            'turns_for_combat': 60 + 58 + 1,
+            'level': 60 + 58 + 1 + 1,
+            'round': 60 + 58 + 1 + 1 + 1,
+        }
+        return hardcoded_map.get(field_name, default_index)
+
 def null_encode(champ_object):
     return None
 
@@ -231,7 +248,8 @@ class Player:
     @health.setter
     def health(self, new_health):
         self._health = new_health
-        self._player_public_vector[60+58] = np.ones((4,7)) * new_health
+        health_idx = get_player_field_index('health', 60+58)
+        self._player_public_vector[health_idx] = np.ones((4,7)) * new_health
 
     @property
     def win_streak(self):
@@ -256,7 +274,8 @@ class Player:
     @round.setter
     def round(self, new_round):
         self._round = new_round
-        self._player_public_vector[60+58+1+1+1] = np.ones((4,7)) * new_round
+        round_idx = get_player_field_index('round', 60+58+1+1+1)
+        self._player_public_vector[round_idx] = np.ones((4,7)) * new_round
 
     @property
     def turns_for_combat(self):
@@ -265,7 +284,8 @@ class Player:
     @turns_for_combat.setter
     def turns_for_combat(self, new_t_f_c):
         self._turns_for_combat = new_t_f_c
-        self._player_public_vector[60+58+1] = np.ones((4,7)) * new_t_f_c
+        tfc_idx = get_player_field_index('turns_for_combat', 60+58+1)
+        self._player_public_vector[tfc_idx] = np.ones((4,7)) * new_t_f_c
 
     @property
     def level(self):
@@ -274,7 +294,8 @@ class Player:
     @level.setter
     def level(self, new_level):
         self._level = new_level
-        self._player_public_vector[60+58+1+1] = np.ones((4,7)) * new_level
+        level_idx = get_player_field_index('level', 60+58+1+1)
+        self._player_public_vector[level_idx] = np.ones((4,7)) * new_level
     
     @property
     def exp(self):

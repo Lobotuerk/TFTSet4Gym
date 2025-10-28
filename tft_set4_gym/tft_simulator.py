@@ -8,6 +8,7 @@ from .player import Player as player_class
 from .step_function import Step_Function
 from .game_round import Game_Round
 from .observation import Observation
+from .observation_schema import OBSERVATION_REGISTRY
 from pettingzoo.utils.env import AECEnv
 from pettingzoo.utils import wrappers
 from pettingzoo.utils import AgentSelector
@@ -143,14 +144,15 @@ class TFT_Simulator(AECEnv):
         #              dtype=np.float32) for _ in self.possible_agents])
         # )
 
-        # For PPO
+        # For PPO - Use schema-based observation spaces
+        schema_config = OBSERVATION_REGISTRY.get_combined_schema_config()
         self.observation_spaces = dict(
             zip(
                 self.agents,
                 [
                     Dict({
-                        "tensor": Box(low=0, high=55.0, shape=(config.OBSERVATION_SIZE,), dtype=np.float64),
-                        "action_mask": Box(low=0, high=1, shape=(54,), dtype=np.int8)
+                        "tensor": Box(**schema_config["tensor"]),
+                        "action_mask": Box(**schema_config["action_mask"])
                     }) for _ in self.agents
                 ],
             )
@@ -164,6 +166,39 @@ class TFT_Simulator(AECEnv):
         self.action_spaces = {agent: MultiDiscrete(config.ACTION_DIM)
                               for agent in self.agents}
         super().__init__()
+    
+    def get_observation_field(self, agent: str, field_name: str):
+        """Get a specific field value from an agent's observation."""
+        if agent not in self.observations or "tensor" not in self.observations[agent]:
+            return None
+            
+        game_obs = self.game_observations[agent]
+        return game_obs.get_field_value(field_name, self.observations[agent]["tensor"])
+    
+    def update_observation_schema(self, new_schema_name: str):
+        """Dynamically update the observation schema for experimentation."""
+        if new_schema_name in OBSERVATION_REGISTRY._schemas:
+            # Update all observation objects to use new schema
+            for game_obs in self.game_observations.values():
+                from .observation_builder import ObservationBuilder
+                game_obs.builder = ObservationBuilder()  # Recreate with new schema
+            
+            # Update observation spaces
+            schema_config = OBSERVATION_REGISTRY.get_combined_schema_config()
+            self.observation_spaces = dict(
+                zip(
+                    self.agents,
+                    [
+                        Dict({
+                            "tensor": Box(**schema_config["tensor"]),
+                            "action_mask": Box(**schema_config["action_mask"])
+                        }) for _ in self.agents
+                    ],
+                )
+            )
+            print(f"Updated observation schema to: {new_schema_name}")
+        else:
+            print(f"Schema '{new_schema_name}' not found")
 
     @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):

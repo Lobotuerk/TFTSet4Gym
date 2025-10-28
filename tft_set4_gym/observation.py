@@ -4,6 +4,8 @@ from . import config
 from .stats import COST
 from .origin_class import team_traits, game_comp_tiers
 from . import utils as utils
+from .observation_schema import get_observation_schema, OBSERVATION_REGISTRY
+from .observation_builder import ObservationBuilder
 
 '''
 Includes the vector of the shop, bench, board, and item list.
@@ -12,10 +14,18 @@ action vector = [Decision, shop, champion_bench, item_bench, x_axis, y_axis, x_a
 '''
 class Observation:
     def __init__(self):
+        # Enhanced observation system with schema integration
+        self.builder = ObservationBuilder()
+        
+        # Legacy attributes for backward compatibility
         self.shop_vector = None
         self.shop_mask = np.ones(5, dtype=np.int8)
         self.game_comp_vector = np.zeros(208)
-        self.dummy_observation = np.zeros(config.OBSERVATION_SIZE)
+        
+        # Use schema to determine observation size
+        schema = get_observation_schema("current_player")
+        self.dummy_observation = np.zeros(schema.total_size)
+        
         self.cur_player_observations = collections.deque(maxlen=config.OBSERVATION_TIME_STEPS *
                                                          config.OBSERVATION_TIME_STEP_INTERVAL)
         self.other_player_observations = {"player_" + str(player_id): np.zeros((26, 6, 10))
@@ -32,60 +42,52 @@ class Observation:
                     The next action format to use if using a 1d action space.
     Outputs     - A dictionary with a tensor field (input to the representation network) and a mask for legal actions
     """
-    def observation(self, player_id, player, action_vector=np.array([])):
-        # Fetch the shop vector and game comp vector
-        shop_vector = self.shop_vector
-        game_state_vector = self.game_comp_vector
-        # Concatenate all vector based player information
-        game_state_tensor = np.concatenate((player.player_public_vector, player.player_private_vector + shop_vector))
-        # player.bench_vector,
-        # player.chosen_vector,
-        # player.item_vector,
-        # game_state_vector,
-        # action_vector,
-        # np.expand_dims(self.turn_since_update, axis=-1)
-
-        # Initially fill the queue with duplicates of first observation
-        # we can still sample when there aren't enough time steps yet
+    def observation(self, player_id: str, player, action_vector=np.array([])):
+        """
+        Create observation using the modern schema system.
+        Maintains backward compatibility with existing interface.
+        """
+        # Build the main observation using the schema
+        obs_dict = self.builder.build_observation(player_id, player, self.shop_vector)
+        
+        # Handle time-stepped observations (existing logic)
+        game_state_tensor = obs_dict["tensor"]
+        
+        # Time-stepping logic (keep existing behavior)
         maxLen = config.OBSERVATION_TIME_STEPS * config.OBSERVATION_TIME_STEP_INTERVAL
         if len(self.cur_player_observations) == 0:
             for _ in range(maxLen):
                 self.cur_player_observations.append(game_state_tensor)
-
-        # Enqueue the latest observation and pop the oldest (performed automatically by deque with maxLen configured)
+        
         self.cur_player_observations.append(game_state_tensor)
-
-        # # sample every N time steps at M intervals, where maxLen of queue = M*N
-        # cur_player_observation = np.array([self.cur_player_observations[i]
-        #                               for i in range(0, maxLen, config.OBSERVATION_TIME_STEP_INTERVAL)]).flatten()
-
+        
+        # Sample time-stepped observations
         cur_player_tensor_observation = []
         for i in range(0, maxLen, config.OBSERVATION_TIME_STEP_INTERVAL):
             tensor = self.cur_player_observations[i]
             cur_player_tensor_observation.append(tensor)
-        cur_player_tensor_observation = np.asarray(cur_player_tensor_observation).flatten()
-        # cur_player_tensor_observation = cur_player_tensor_observation
-
-        # Fetch other player data
-        # other_player_tensor_observation_list = []
-        # for k, v in self.other_player_observations.items():
-        #     if k != player_id:
-        #         other_player_tensor_observation_list.append(v)
-        # # other_player_tensor_observation = np.array(other_player_tensor_observation_list).flatten()
-        # other_player_tensor_observation = np.concatenate(other_player_tensor_observation_list)
-
-        # Gather all vectors into one place
-        # total_tensor_observation = np.concatenate((cur_player_tensor_observation, other_player_tensor_observation))
-        total_tensor_observation = cur_player_tensor_observation
-
-        # Create a simple action mask - for now allow all actions
-        # TODO: Implement proper action masking based on game state
-        action_mask = np.ones(54, dtype=np.int8)
-
-        # Used to help the model know how outdated it's information on other players is.
-        # Also helps with ensuring that two observations with the same board and bench are not equal.
+        
+        final_tensor = np.asarray(cur_player_tensor_observation).flatten()
+        
+        # Update time tracking
         self.turn_since_update += 0.01
-        return {"tensor": total_tensor_observation, "action_mask": action_mask}
+        
+        return {
+            "tensor": final_tensor,
+            "action_mask": obs_dict["action_mask"]
+        }
+    
+    def get_field_value(self, field_name: str, observation=None):
+        """Get the value of a specific field from an observation."""
+        if observation is None:
+            observation = self.dummy_observation
+        return self.builder.get_field_from_observation(observation, field_name)
+    
+    def set_field_value(self, field_name: str, value, observation=None):
+        """Set the value of a specific field in an observation."""
+        if observation is None:
+            observation = self.dummy_observation
+        return self.builder.set_field_in_observation(observation, field_name, value)
 
     """
     Description - Generates the other players observation from the perspective of the current player.

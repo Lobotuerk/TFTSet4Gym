@@ -12,7 +12,9 @@ CHAMP_ENCODING_SIZE = 26
 NUM_PLAYERS = 8
 LOG_COMBAT = False
 DEBUG = False
-OBSERVATION_SIZE = 5152
+
+# Observation size - will be updated by schema system
+OBSERVATION_SIZE = 5152  # Default, updated dynamically by schema
 OBSERVATION_TIME_STEPS = 1
 OBSERVATION_TIME_STEP_INTERVAL = 1
 ACTION_DIM = [7, 37, 10]
@@ -46,4 +48,17 @@ LEAP_DELAY = 395  # assassins and shades
 
 MATCHMAKING_WEIGHTS = 10
 WEIGHTS_INCREMENT = 3
+
+
+def update_observation_size_from_schema():
+    """Update OBSERVATION_SIZE based on current schema. Call this after imports."""
+    try:
+        from .observation_schema import get_observation_schema
+        global OBSERVATION_SIZE
+        schema = get_observation_schema("current_player")
+        OBSERVATION_SIZE = schema.total_size
+        return OBSERVATION_SIZE
+    except ImportError:
+        # Fallback if schema system not available
+        return OBSERVATION_SIZE
 

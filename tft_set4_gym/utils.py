@@ -4,6 +4,27 @@ from functools import wraps
 from time import time
 from .stats import COST
 
+# Schema-based field access functions
+def get_field_indices_safe(field_name, default_start=0, default_end=1):
+    """Get field indices with fallback for backward compatibility."""
+    try:
+        from .observation_schema import get_field_indices
+        return get_field_indices(field_name)
+    except (ImportError, KeyError):
+        # Fallback to hardcoded values if schema not available
+        hardcoded_map = {
+            'health': (60 + 58, 60 + 58 + 1),
+            'round': (60 + 58 + 1 + 1 + 1, 60 + 58 + 1 + 1 + 1 + 1),
+            'turns_for_combat': (60 + 58 + 1, 60 + 58 + 1 + 1),
+            'level': (60 + 58 + 1 + 1, 60 + 58 + 1 + 1 + 1),
+            'exp_to_level': (60 + 58 + 1 + 1 + 1 + 1 + 59, 60 + 58 + 1 + 1 + 1 + 1 + 60),
+            'gold': (60 + 58 + 1 + 1 + 1 + 1 + 60, 60 + 58 + 1 + 1 + 1 + 1 + 61),
+            'streak': (60 + 58 + 1 + 1 + 1 + 1 + 61, 60 + 58 + 1 + 1 + 1 + 1 + 62),
+            'shop_champions': (60 + 58 + 1 + 1 + 1 + 1, 60 + 58 + 1 + 1 + 1 + 1 + 58),
+            'shop_chosen': (60 + 58 + 1 + 1 + 1 + 1 + 58, 60 + 58 + 1 + 1 + 1 + 1 + 59)
+        }
+        return hardcoded_map.get(field_name, (default_start, default_end))
+
 
 
 def champ_binary_encode(n):
@@ -73,26 +94,35 @@ def player_map_from_obs(observation):
     return player_map
 
 def streak_from_obs(observation):
-    return observation[60 + 58 + 1 + 1 + 1 + 1 + 61][0][0]
+    start, end = get_field_indices_safe('streak', 60 + 58 + 1 + 1 + 1 + 1 + 61, 60 + 58 + 1 + 1 + 1 + 1 + 62)
+    return observation[start][0][0]
     
 def gold_from_obs(observation):
-    return observation[60 + 58 + 1 + 1 + 1 + 1 + 60][0][0]
+    start, end = get_field_indices_safe('gold', 60 + 58 + 1 + 1 + 1 + 1 + 60, 60 + 58 + 1 + 1 + 1 + 1 + 61)
+    return observation[start][0][0]
 
 def exp_to_level_from_obs(observation):
-    return observation[60 + 58 + 1 + 1 + 1 + 1 + 59][0][0]
+    start, end = get_field_indices_safe('exp_to_level', 60 + 58 + 1 + 1 + 1 + 1 + 59, 60 + 58 + 1 + 1 + 1 + 1 + 60)
+    return observation[start][0][0]
 
 def hp_from_obs(observation):
-    return observation[60 + 58][0][0]
+    start, end = get_field_indices_safe('health', 60 + 58, 60 + 58 + 1)
+    return observation[start][0][0]
 
 def round_from_obs(observation):
-    return observation[60 + 58 + 1 + 1 + 1][0][0]
+    start, end = get_field_indices_safe('round', 60 + 58 + 1 + 1 + 1, 60 + 58 + 1 + 1 + 1 + 1)
+    return observation[start][0][0]
 
 def t_f_c_from_obs(observation):
-    return observation[60 + 58 + 1][0][0]
+    start, end = get_field_indices_safe('turns_for_combat', 60 + 58 + 1, 60 + 58 + 1 + 1)
+    return observation[start][0][0]
 
 def units_in_shop_from_obs(observation):
-    units = observation[60 + 58 + 1 + 1 + 1 + 1 : 60 + 58 + 1 + 1 + 1 + 1 + 58, 0, 0]
-    chosen = observation[60 + 58 + 1 + 1 + 1 + 1 + 58][0][0]
+    shop_start, shop_end = get_field_indices_safe('shop_champions', 60 + 58 + 1 + 1 + 1 + 1, 60 + 58 + 1 + 1 + 1 + 1 + 58)
+    chosen_start, chosen_end = get_field_indices_safe('shop_chosen', 60 + 58 + 1 + 1 + 1 + 1 + 58, 60 + 58 + 1 + 1 + 1 + 1 + 59)
+    
+    units = observation[shop_start:shop_end, 0, 0]
+    chosen = observation[chosen_start][0][0]
     if int(chosen) > 0:
         chosen = list(COST.keys())[int(chosen)+1] + "_chosen"
     else:
@@ -136,4 +166,5 @@ def champ_id_from_name(champ_name):
     return (list(COST.keys()).index(champ_name)) - 1
 
 def level_from_obs(observation):
-    return observation[60 + 58 + 1 + 1][0][0]
+    start, end = get_field_indices_safe('level', 60 + 58 + 1 + 1, 60 + 58 + 1 + 1 + 1)
+    return observation[start][0][0]
