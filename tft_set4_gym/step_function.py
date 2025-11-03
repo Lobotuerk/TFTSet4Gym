@@ -86,18 +86,9 @@ class Step_Function:
             # 7:44 (champ_loc_target), 44:54 (item_loc_target)
             
             # Handle both array and scalar actions
-            if hasattr(action, 'ndim') and action.ndim > 0 and action.size > 0:
-                # MultiDiscrete action: [action_selector, param1, param2]
-                action_selector = action[0]
-                param1 = action[1] if action.size > 1 else 0
-                param2 = action[2] if action.size > 2 else 0
-            else:
-                # Scalar action - need to decode it
-                action_val = int(action)
-                # For now, just use as action_selector and set params to 0
-                action_selector = action_val % 7  # Limit to valid range
-                param1 = 0
-                param2 = 0
+            action_selector = action[0]
+            param1 = action[1]
+            param2 = action[2]
             # game_observations[key].generate_other_player_vectors(player, players)
             if action_selector == 0:
                 player.print(f"pass action")
@@ -131,8 +122,8 @@ class Step_Function:
                         # game_observations[key].generate_game_comps_vector()
             # elif action_selector == 6:
             #     # Place item on champ
-            #     item_selector = np.argmax(action[44:54])
-            #     move_loc = np.argmax(action[7:43])
+            #     item_selector = param1 % 10
+            #     move_loc = param2 % 37
             #     if move_loc >= 28:
             #         move_loc -= 28
             #         player.move_item_to_bench(item_selector, move_loc)

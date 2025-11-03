@@ -334,7 +334,6 @@ class TFT_Simulator(AECEnv):
                     # Anyone left alive (should only be 1 player unless time limit) wins the game
                     for player_id in self.agents:
                         if self.PLAYERS[player_id] and self.PLAYERS[player_id].health > 0:
-                            self.PLAYERS[player_id].won_game()
                             self.rewards[player_id] = 250
                             self._cumulative_rewards[player_id] = self.rewards[player_id]
                             self.PLAYERS[player_id] = None  # Without this the reward is reset

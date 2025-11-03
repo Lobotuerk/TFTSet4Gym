@@ -15,21 +15,11 @@ from math import floor
 from . import config
 
 # Schema-based helper function
-def get_player_field_index(field_name, default_index):
-    """Get field index with fallback for backward compatibility."""
-    try:
-        from .observation_schema import get_field_indices
-        start, end = get_field_indices(field_name)
-        return start
-    except (ImportError, KeyError):
-        # Fallback to hardcoded values
-        hardcoded_map = {
-            'health': 60 + 58,
-            'turns_for_combat': 60 + 58 + 1,
-            'level': 60 + 58 + 1 + 1,
-            'round': 60 + 58 + 1 + 1 + 1,
-        }
-        return hardcoded_map.get(field_name, default_index)
+def get_player_field_index(field_name):
+    """Get field index"""
+    from .observation_schema import get_field_indices
+    start, end = get_field_indices(field_name)
+    return start
 
 def null_encode(champ_object):
     return None
@@ -137,17 +127,6 @@ class Player:
         # This time we only need 5 bits total
         self.chosen_vector = np.zeros(5)
 
-        # player related info split between what other players can see and what they can't see
-        # BOARD 1 * 1 * 1 -> 28 * 4 * 7
-        # INFO 1 * 1 * 8 -> 28 * 4 * 9 -> HP, MaxLevel, StreakLVL, TurnsForCombat, Level,  ExpToLevel, Gold, CurrentStreak
-        # SHOP 1 * 1 * 9 -> 28 * 5 * 10
-        # BENCH 1 * 5 * 1 -> 28 * 5 * 9
-        # ITEMS 1 * 6 * 1 -> 28 * 6 * 10
-        # 
-        # INFO -> [HP, Level]
-        #         [StreakLVL, TurnsForCombat]
-        #         [Level, ExpToLevel]
-        #         [Gold, CurrentStreak]
         self._player_public_vector = np.zeros((60 + 58 + 1 + 1 + 1 + 1, 4, 7))
         self.player_private_vector = np.zeros((59 + 1 + 1 + 1, 4, 7))
 
@@ -189,8 +168,6 @@ class Player:
         self.mistake_reward = 0
         self.level_reward = 0
         self.item_reward = 0
-        self.won_game_reward = 0
-        self.prev_rewards = 0
         self.damage_reward = 0
 
         # Everyone shares the pool object.
@@ -221,11 +198,6 @@ class Player:
 
         self.thieves_gloves_loc = []
 
-        self.action_vector = np.array([1, 0, 0, 0, 0, 0, 0, 0])
-        self.current_action = 0
-        self.action_complete = False
-        self.action_values = []
-
         # Start with two copies of each item in your item pool
         self.item_pool = []
         self.refill_item_pool()
@@ -248,7 +220,7 @@ class Player:
     @health.setter
     def health(self, new_health):
         self._health = new_health
-        health_idx = get_player_field_index('health', 60+58)
+        health_idx = get_player_field_index('health')
         self._player_public_vector[health_idx] = np.ones((4,7)) * new_health
 
     @property
@@ -258,14 +230,10 @@ class Player:
     @win_streak.setter
     def win_streak(self, new_win_streak):
         self._win_streak = new_win_streak
-        # if new_win_streak > abs(self.player_private_vector[0,3,8]):
-        #     self.player_private_vector[0,3,8] = new_win_streak
-        streak_lvl = 0
-        if self._win_streak == 4:
-            streak_lvl = 0.5
-        elif self._win_streak >= 5:
-            streak_lvl = 1
-        # self._player_public_vector[0,1,7] = streak_lvl
+        if abs(self._loss_streak) > self._win_streak:
+            self.player_private_vector[61] = np.ones((4,7)) * self._loss_streak
+        else:
+            self.player_private_vector[61] = np.ones((4,7)) * self._win_streak
 
     @property
     def round(self):
@@ -274,7 +242,7 @@ class Player:
     @round.setter
     def round(self, new_round):
         self._round = new_round
-        round_idx = get_player_field_index('round', 60+58+1+1+1)
+        round_idx = get_player_field_index('round')
         self._player_public_vector[round_idx] = np.ones((4,7)) * new_round
 
     @property
@@ -284,7 +252,7 @@ class Player:
     @turns_for_combat.setter
     def turns_for_combat(self, new_t_f_c):
         self._turns_for_combat = new_t_f_c
-        tfc_idx = get_player_field_index('turns_for_combat', 60+58+1)
+        tfc_idx = get_player_field_index('turns_for_combat')
         self._player_public_vector[tfc_idx] = np.ones((4,7)) * new_t_f_c
 
     @property
@@ -294,7 +262,7 @@ class Player:
     @level.setter
     def level(self, new_level):
         self._level = new_level
-        level_idx = get_player_field_index('level', 60+58+1+1)
+        level_idx = get_player_field_index('level')
         self._player_public_vector[level_idx] = np.ones((4,7)) * new_level
     
     @property
@@ -323,18 +291,6 @@ class Player:
     @loss_streak.setter
     def loss_streak(self, new_loss):
         self._loss_streak = new_loss
-        if abs(self._loss_streak) > self._win_streak:
-            self.player_private_vector[61] = np.ones((4,7)) * self._loss_streak
-        else:
-            self.player_private_vector[61] = np.ones((4,7)) * self._win_streak
-
-    @property
-    def win_streak(self):
-        return self._win_streak
-    
-    @win_streak.setter
-    def win_streak(self, new_loss):
-        self._win_streak = new_loss
         if abs(self._loss_streak) > self._win_streak:
             self.player_private_vector[61] = np.ones((4,7)) * self._loss_streak
         else:
@@ -381,7 +337,6 @@ class Player:
         if self.bench_full():
             self.sell_champion(a_champion, field=False)
             if not from_carousel:
-                self.reward += self.mistake_reward
                 if config.DEBUG:
                     print("Trying to buy a unit with bench full")
                 return False
@@ -413,7 +368,6 @@ class Player:
     #       Should be enough for 2 units to have full items in a game at least
     def add_to_item_bench(self, item):
         if self.item_bench_full(1):
-            self.reward += self.mistake_reward
             if config.DEBUG:
                 print("Failed to add item to item bench")
             return False
@@ -458,7 +412,6 @@ class Player:
     """
     def buy_champion(self, a_champion):
         if cost_star_values[a_champion.cost - 1][a_champion.stars - 1] > self.gold or a_champion.cost == 0:
-            self.reward += self.mistake_reward
             if config.DEBUG:
                 print("No gold to buy champion ", a_champion.name, " from shop ", self.shop_elems)
             return False
@@ -470,16 +423,10 @@ class Player:
         # Which adds another to the pool and need this here to remove the fake copy from the pool
         self.pool_obj.update_pool(a_champion, -1)
         if success:
-            # Leaving this out because the agent will learn to simply buy everything and sell everything
-            # I want it to just buy what it needs to win rounds.
-            # self.reward += 0.005 * cost_star_values[a_champion.cost - 1][a_champion.stars - 1]
             self.print("Spending gold on champion {}".format(a_champion.name) + " with cost = " +
                        str(cost_star_values[a_champion.cost - 1][a_champion.stars - 1])
                        + ", remaining gold " + str(self.gold) + " and chosen = " + str(a_champion.chosen))
             self.generate_player_vector()
-        # else:
-        #     if self.player_num == 0:
-        #         print("Did not buy champion successfully")
         return success
 
     """
@@ -490,13 +437,11 @@ class Player:
     def buy_exp(self):
         # if the player doesn't have enough gold to buy exp or is max level, give bad reward
         if self.gold < self.exp_cost or self.level == self.max_level:
-            self.reward += self.mistake_reward
             self.decision_mask[4] = 0
             if config.DEBUG:
                 print(f"Did not have gold to buy exp, had {self.gold}, needed {self.exp_cost}, was level {self.level}, mask {self.decision_mask[4]}")
             return False
         self.gold -= 4
-        # self.reward += 0.02
         self.print("exp to {} on level {}".format(self.exp, self.level))
         self.exp += 4
         self.level_up()
@@ -829,14 +774,6 @@ class Player:
         if chosen:
             b_champion.new_chosen()
 
-        # Leaving this code here in case I want to give rewards for triple
-        # if b_champion.stars == 2:
-        #     self.reward += 0.05
-        #     self.print("+0.05 reward for making a level 2 champion")
-        # if b_champion.stars == 3:
-        #     self.reward += 1.0
-        #     self.print("+1.0 reward for making a level 3 champion")
-
         self.add_to_bench(b_champion)
         if y != -1:
             self.move_bench_to_board(b_champion.bench_loc, x, y)
@@ -929,7 +866,6 @@ class Player:
             self.exp -= self.level_costs[self.level]
             self.level += 1
             self.max_units += 1
-            self.reward += self.level_reward
             self.print(f"leveled to {self.level}")
             # Only needed if it's possible to level more than once in one transaction
             self.level_up()
@@ -946,8 +882,6 @@ class Player:
         if not self.combat:
             self.loss_streak -= 1
             self.win_streak = 0
-            self.reward -= self.damage_reward * damage
-            self.print(str(-self.damage_reward * damage) + " reward for losing round against player " + str(self.opponent.player_num))
             self.match_history.append(0)
 
             if self.team_tiers['fortune'] > 0:
@@ -1000,7 +934,6 @@ class Player:
                                                                              bench_x, board_x, board_y))
                 self.update_team_tiers()
                 return True
-        self.reward += self.mistake_reward
         if config.DEBUG:
             print(f"Outside board range, bench: {self.bench[bench_x]}, board: {self.board[board_x][board_y]}, \
                   bench_x: {bench_x}, board_x: {board_x}, board_y: {board_y}, util_mask: {self.util_mask[0]}, \
@@ -1027,7 +960,6 @@ class Player:
                     self.generate_board_vector()
                     self.update_team_tiers()
                     return True
-                self.reward += self.mistake_reward
                 if config.DEBUG:
                     print("Unit not on board slot")
                 return False
@@ -1054,7 +986,6 @@ class Player:
                     self.generate_item_vector()
                     self.update_team_tiers()
                     return True
-        self.reward += self.mistake_reward
         if config.DEBUG:
             print(f"Move board to bench outside board limits: {x}, {y}")
         return False
@@ -1114,7 +1045,6 @@ class Player:
                 self.print("moved {} from board [{}, {}] to board [{}, {}]".format(self.board[x2][y2].name, x1, y1, x2, y2))
                 self.generate_board_vector()
                 return True
-        self.reward += self.mistake_reward
         if config.DEBUG:
             print("Outside board limits")
         return False
@@ -1233,7 +1163,6 @@ class Player:
                         champ.items.append(item_names[item_index])
                         if champ.items[0] == 'thieves_gloves':
                             self.thieves_gloves(x, y)
-                        self.reward += .2 * self.item_reward
                         self.print(
                             ".2 reward for combining two basic items into a {}".format(item_names[item_index]))
                     elif champ.items[-1] in basic_items and self.item_bench[xBench] not in basic_items:
@@ -1260,8 +1189,6 @@ class Player:
                 self.print("After Move {} to {} with items {}".format(self.item_bench[xBench], champ.name, champ.items))
                 self.thieves_gloves_loc.append([x, -1])
                 return True
-        # last case where 3 items but the last item is a basic item and the item to input is also a basic item
-        self.reward += self.mistake_reward
         if config.DEBUG:
             print(f"Failed to add item {self.item_bench[xBench]} in slot {xBench} to {champ} in {x}, {y}, item_mask: {self.item_mask}")
             if champ:
@@ -1328,7 +1255,6 @@ class Player:
         keys = list(self.team_composition.keys())
         values = list(self.team_composition.values())
         tier_values = list(self.team_tiers.values())
-        self.prev_rewards = self.reward
         for i in range(len(self.team_composition)):
             if values[i] != 0:
                 if log:
@@ -1406,11 +1332,9 @@ class Player:
     def refresh(self):
         if self.gold >= self.refresh_cost:
             self.gold -= self.refresh_cost
-            self.reward += self.refresh_reward * self.refresh_cost
             self.print("Refreshing shop")
             self.generate_player_vector()
             return True
-        self.reward += self.mistake_reward
         if config.DEBUG:
             print("Could not refresh")
         return False
@@ -1577,7 +1501,6 @@ class Player:
         # Need to add the behavior that on carousel when bench is full, add to board.
         if not (self.remove_triple_catalog(s_champion, golden=golden) and self.return_item(s_champion) and not
                 s_champion.target_dummy):
-            self.reward += self.mistake_reward
             self.print("Could not sell champion " + s_champion.name)
             if config.DEBUG:
                 print("Could not sell champion " + s_champion.name)
@@ -1620,7 +1543,6 @@ class Player:
                     self.return_item_from_bench(location)):
                 self.print("Mistake in sell from bench with {} and level {}".format(self.bench[location],
                                                                                     self.bench[location].stars))
-                self.reward += self.mistake_reward
                 if config.DEBUG:
                     print("Could not remove from triple catalog or return item")
                 return False
@@ -1642,14 +1564,9 @@ class Player:
             print("Nothing at bench location")
         return False
 
-    """
-    Description - Returns true if there are no possible actions in the state
-    Outputs     - True: No possible actions
-                  False: There are actions possible
-    """
+
     def spill_reward(self, damage):
-        self.reward += self.damage_reward * damage
-        self.print("Spill reward of {} received".format(self.damage_reward * damage))
+        self.health -= damage
 
     """
     Description - Does all operations that happen at the start of the round. 
@@ -1661,7 +1578,6 @@ class Player:
     def start_round(self, t_round):
         self.start_time = time.time_ns()
         self.round = t_round
-        self.reward += self.num_units_in_play * self.minion_count_reward
         self.gold_income(self.round)
         self.generate_player_vector()
         if self.kayn_check():
@@ -1861,13 +1777,6 @@ class Player:
         return False
 
     """
-    Description - Called at the conclusion of the game to the player who won the game
-    """
-    def won_game(self):
-        self.reward += self.won_game_reward
-        self.print("+0 reward for winning game")
-
-    """
     Description - Same as loss_round but if the opponent was a ghost
     Inputs      - damage: Int
                     amount of damage inflicted in the combat round
@@ -1901,8 +1810,6 @@ class Player:
             self.win_streak += 1
             self.loss_streak = 0
             self.gold += 1
-            self.reward += self.damage_reward * damage
-            self.print(str(self.damage_reward * damage) + " reward for winning round against player " + str(self.opponent.player_num))
             self.match_history.append(1)
 
             if self.team_tiers['fortune'] > 0:
