@@ -191,8 +191,12 @@ class TFT_Simulator(ParallelEnv):
         Step function for parallel environment.
         actions: a dictionary of actions for each agent
         """
+        # Keep track of agents that were active at the start of the step
+        # These agents must be in the return dictionaries
+        active_this_step = self.agents[:]
+        
         # Clear rewards from previous step
-        self.rewards = {agent: 0 for agent in self.agents}
+        self.rewards = {agent: 0 for agent in active_this_step}
         
         # Apply actions for all active agents
         for agent, action in actions.items():
@@ -216,7 +220,8 @@ class TFT_Simulator(ParallelEnv):
                         self.rewards[agent] += 250
                         self.PLAYERS[agent] = None
 
-                self.terminations = {a: True for a in self.agents}
+                for agent in self.agents:
+                    self.terminations[agent] = True
                 self.agents = []
 
             if self.agents:
@@ -251,14 +256,12 @@ class TFT_Simulator(ParallelEnv):
 
         # PettingZoo ParallelEnv expects only entries for current agents
         # except when they just terminated.
-        # However, for simplicity and robustness, we can return what we have, 
-        # but technically it should be filtered.
         
-        out_obs = {a: self.observations[a] for a in self.agents}
-        out_rewards = {a: self.rewards[a] for a in self.agents}
-        out_terminations = {a: self.terminations.get(a, False) for a in self.agents}
-        out_truncations = {a: self.truncations.get(a, False) for a in self.agents}
-        out_infos = {a: self.infos[a] for a in self.agents}
+        out_obs = {a: self.observations[a] for a in active_this_step}
+        out_rewards = {a: self.rewards[a] for a in active_this_step}
+        out_terminations = {a: self.terminations.get(a, False) for a in active_this_step}
+        out_truncations = {a: self.truncations.get(a, False) for a in active_this_step}
+        out_infos = {a: self.infos[a] for a in active_this_step}
 
         return out_obs, out_rewards, out_terminations, out_truncations, out_infos
 
