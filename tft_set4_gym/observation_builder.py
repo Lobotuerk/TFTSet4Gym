@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional
 import numpy as np
 from .observation_schema import get_observation_schema, OBSERVATION_REGISTRY
 from . import config
+from .stats import COST
 
 
 class ObservationBuilder:
@@ -40,46 +41,94 @@ class ObservationBuilder:
         }
     
     def _build_tensor_observation(self, player: Any, shop_vector: Optional[np.ndarray] = None) -> np.ndarray:
-        """Build the main tensor observation."""
+        """Build the main tensor observation by reading player properties directly."""
         schema = self.current_player_schema
         observation = np.zeros(schema.total_size, dtype=np.float64)
         
-        # Use the player's existing vectors and map them to schema fields
-        try:
-            # Player public vector contains board, health, etc.
-            if hasattr(player, '_player_public_vector') and player._player_public_vector is not None:
-                public_flat = player._player_public_vector.flatten()
-                public_size = min(len(public_flat), schema.total_size)
-                observation[:public_size] = public_flat[:public_size]
-            
-            # Player private vector contains gold, exp, etc.
-            if hasattr(player, 'player_private_vector') and player.player_private_vector is not None:
-                private_flat = player.player_private_vector.flatten()
-                # Append private data after public data
-                start_idx = len(player._player_public_vector.flatten()) if hasattr(player, '_player_public_vector') else 0
-                end_idx = min(start_idx + len(private_flat), schema.total_size)
-                if start_idx < schema.total_size:
-                    observation[start_idx:end_idx] = private_flat[:end_idx-start_idx]
-            
-            # Add shop vector if provided
-            if shop_vector is not None:
-                shop_flat = shop_vector.flatten()
-                # Find where to place shop data (after player data)
-                player_data_size = 0
-                if hasattr(player, '_player_public_vector'):
-                    player_data_size += player._player_public_vector.size
-                if hasattr(player, 'player_private_vector'):
-                    player_data_size += player.player_private_vector.size
+        def set_field(name: str, value: Any):
+            """Helper to set a field in the observation tensor."""
+            try:
+                field_slice = schema.get_field_slice(name)
+                field_def = schema.get_field(name)
                 
-                shop_start = player_data_size
-                shop_end = min(shop_start + len(shop_flat), schema.total_size)
-                if shop_start < schema.total_size:
-                    observation[shop_start:shop_end] = shop_flat[:shop_end-shop_start]
+                if isinstance(value, (int, float, np.number)):
+                    # For scalar values, broadcast to the field shape (usually (1, 4, 7))
+                    val_arr = np.ones(field_def.shape) * value
+                elif isinstance(value, np.ndarray):
+                    # For arrays, ensure they match the expected shape
+                    if value.shape != field_def.shape:
+                        # Try to broadcast or reshape if possible, or just take what fits
+                        val_arr = np.zeros(field_def.shape)
+                        # Truncate or pad as needed
+                        slices = tuple(slice(0, min(s_src, s_dst)) for s_src, s_dst in zip(value.shape, field_def.shape))
+                        val_arr[slices] = value[slices]
+                    else:
+                        val_arr = value
+                else:
+                    val_arr = np.zeros(field_def.shape)
                     
+                observation[field_slice] = val_arr.flatten()
+            except KeyError:
+                # Field not in schema, skip it
+                pass
+
+        # 1. Board state - Read directly from player.board encoded_list
+        try:
+            # board[x] is an encoded_list(4, encode_champ_object) -> get_encoding() is (60, 1, 4)
+            # We want (60, 4, 7)
+            board_encodings = []
+            for x in range(7):
+                # Reshape (60, 1, 4) to (60, 4, 1)
+                enc = player.board[x].get_encoding()
+                board_encodings.append(enc.reshape((60, 4, 1)))
+            
+            board_tensor = np.concatenate(board_encodings, axis=2) # (60, 4, 7)
+            
+            set_field("board_champions", board_tensor[0:58])
+            set_field("board_stars", board_tensor[58:59])
+            set_field("board_chosen", board_tensor[59:60])
         except Exception as e:
-            print(f"Warning: Error building observation - {e}")
-            # Return zeros if there's an issue
-            pass
+            print(f"Warning: Error encoding board for observation - {e}")
+
+        # 2. Bench state
+        try:
+            bench_count = np.zeros(58)
+            for unit in player.bench:
+                if unit:
+                    # CHAMPION_NAMES index mapping (consistent with encode_champ_object)
+                    c_index = list(COST.keys()).index(unit.name)
+                    bench_count[c_index-1] += 1
+            
+            bench_champions = np.zeros((58, 4, 7))
+            for n in range(58):
+                bench_champions[n] = np.ones((4, 7)) * bench_count[n]
+            set_field("bench_champions", bench_champions)
+        except Exception as e:
+            print(f"Warning: Error encoding bench for observation - {e}")
+
+        # 3. Player state (Public)
+        set_field("health", player.health)
+        set_field("turns_for_combat", player.turns_for_combat)
+        set_field("level", player.level)
+        set_field("round", player.round)
+        
+        # 4. Player state (Private)
+        try:
+            exp_to_level = player.level_costs[player.level] - player.exp
+        except (IndexError, AttributeError):
+            exp_to_level = 0
+            
+        set_field("exp_to_level", exp_to_level)
+        set_field("gold", player.gold)
+        
+        streak = player.loss_streak if abs(player.loss_streak) > player.win_streak else player.win_streak
+        set_field("streak", streak)
+        
+        # 5. Shop state
+        if shop_vector is not None:
+            # shop_vector is expected to be (62, 4, 7)
+            set_field("shop_champions", shop_vector[0:58])
+            set_field("shop_chosen", shop_vector[58:59])
         
         return observation
     

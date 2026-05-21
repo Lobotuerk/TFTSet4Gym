@@ -69,6 +69,10 @@ class TFTParallelWrapper(ParallelEnv):
         result = self.par_env.step(actions)
         self.agents = self._get_current_agents()
         return result
+
+    def render(self):
+        """Render the environment."""
+        return self.aec_env.render()
     
     @property 
     def num_agents(self):
@@ -257,7 +261,7 @@ class TFT_Simulator(AECEnv):
             self.PLAYERS[agent].turns_for_combat = config.ACTIONS_PER_TURN
 
         self.observations = {agent: self.game_observations[agent].observation(
-            agent, self.PLAYERS[agent], self.PLAYERS[agent].action_vector) for agent in self.agents}
+            agent, self.PLAYERS[agent]) for agent in self.agents}
 
         self._agent_selector.reinit(self.agents)
         self.agent_selection = self._agent_selector.next()
@@ -266,7 +270,11 @@ class TFT_Simulator(AECEnv):
         return self.observations
 
     def render(self):
-        ...
+        """
+        Renders the environment. 
+        Currently placeholder to satisfy PettingZoo API.
+        """
+        return None
 
     def state(self):
         """
@@ -316,7 +324,7 @@ class TFT_Simulator(AECEnv):
         for agent in self.agents:
             self.PLAYERS[agent].turns_for_combat = config.ACTIONS_PER_TURN - self.actions_taken
             self.observations[agent] = self.game_observations[agent].observation(
-                agent, self.PLAYERS[agent], self.PLAYERS[agent].action_vector)
+                agent, self.PLAYERS[agent])
 
         # Also called in many environments but the line above this does the same thing but better
         # self._accumulate_rewards()
@@ -363,7 +371,7 @@ class TFT_Simulator(AECEnv):
                     for agent in _live_agents:
                         self.PLAYERS[agent].turns_for_combat = config.ACTIONS_PER_TURN - self.actions_taken
                         self.observations[agent] = self.game_observations[agent].observation(
-                            agent, self.PLAYERS[agent], self.PLAYERS[agent].action_vector)
+                            agent, self.PLAYERS[agent])
 
             for player_id in self.PLAYERS:
                 if self.PLAYERS[player_id]:

@@ -82,13 +82,26 @@ class Step_Function:
     def batch_2d_controller(self, action, player, players, key, game_observations):
         # single_step_action_controller took 0.0009961128234863281 seconds to finish
         if player:
+            # Handle both array/list and scalar actions for robustness
+            if isinstance(action, (int, np.integer)) or (hasattr(action, 'ndim') and action.ndim == 0):
+                # If scalar, we might be in a different action space mode
+                # but for now let's just avoid crashing and treat it as a pass or single-param action
+                action_selector = int(action)
+                param1 = 0
+                param2 = 0
+            elif hasattr(action, '__getitem__') and hasattr(action, '__len__') and len(action) >= 3:
+                action_selector = action[0]
+                param1 = action[1]
+                param2 = action[2]
+            else:
+                # Fallback for unexpected action formats
+                action_selector = 0
+                param1 = 0
+                param2 = 0
+
             # action format = 0:7 (action_selector),
             # 7:44 (champ_loc_target), 44:54 (item_loc_target)
             
-            # Handle both array and scalar actions
-            action_selector = action[0]
-            param1 = action[1]
-            param2 = action[2]
             # game_observations[key].generate_other_player_vectors(player, players)
             if action_selector == 0:
                 player.print(f"pass action")

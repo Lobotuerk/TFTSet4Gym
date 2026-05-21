@@ -133,8 +133,8 @@ class ObservationSchemaRegistry:
         
         if schema_name == "current_player":
             return {
-                "low": 0.0,
-                "high": 55.0,
+                "low": -100.0,
+                "high": 100.0,
                 "shape": (schema.total_size,),
                 "dtype": np.float64
             }
