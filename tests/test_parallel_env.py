@@ -118,9 +118,12 @@ class TestParallelEnvAPI:
         env = self.get_env()
         observations, infos = env.reset()
         
+        # Keep track of agents active BEFORE the step
+        active_before = env.agents[:]
+        
         # Create valid actions for all agents
         actions = {}
-        for agent in env.agents:
+        for agent in active_before:
             action_space = env.action_spaces[agent]
             actions[agent] = action_space.sample()
         
@@ -140,13 +143,14 @@ class TestParallelEnvAPI:
         assert isinstance(truncations, dict)
         assert isinstance(infos, dict)
         
-        # Check that all agents have entries in each dict
-        for agent in env.agents:
-            assert agent in observations
-            assert agent in rewards
-            assert agent in terminations
-            assert agent in truncations
-            assert agent in infos
+        # Check that all agents active BEFORE the step have entries in each dict
+        # This is a requirement of the PettingZoo Parallel API
+        for agent in active_before:
+            assert agent in observations, f"Agent {agent} missing from observations"
+            assert agent in rewards, f"Agent {agent} missing from rewards"
+            assert agent in terminations, f"Agent {agent} missing from terminations"
+            assert agent in truncations, f"Agent {agent} missing from truncations"
+            assert agent in infos, f"Agent {agent} missing from infos"
             
             # Check value types
             assert isinstance(rewards[agent], (int, float))
@@ -256,21 +260,31 @@ class TestParallelEnvAPI:
         initial_agents = len(env.agents)
         
         while env.agents and step_count < max_steps:
+            # Keep track of agents active BEFORE the step
+            active_before = env.agents[:]
+            
             # Generate actions for all active agents
             actions = {}
-            for agent in env.agents:
+            for agent in active_before:
                 action_space = env.action_space(agent)
                 actions[agent] = action_space.sample()
             
             # Take step
             observations, rewards, terminations, truncations, infos = env.step(actions)
             
-            # Verify step outputs
+            # Verify step outputs - MUST contain entries for all agents that were active BEFORE the step
             assert isinstance(observations, dict)
             assert isinstance(rewards, dict)
             assert isinstance(terminations, dict)
             assert isinstance(truncations, dict)
             assert isinstance(infos, dict)
+            
+            for agent in active_before:
+                assert agent in observations, f"Agent {agent} missing from observations at step {step_count}"
+                assert agent in rewards, f"Agent {agent} missing from rewards at step {step_count}"
+                assert agent in terminations, f"Agent {agent} missing from terminations at step {step_count}"
+                assert agent in truncations, f"Agent {agent} missing from truncations at step {step_count}"
+                assert agent in infos, f"Agent {agent} missing from infos at step {step_count}"
             
             step_count += 1
         

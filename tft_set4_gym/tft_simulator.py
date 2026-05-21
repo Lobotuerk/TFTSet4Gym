@@ -194,7 +194,7 @@ class TFT_Simulator(ParallelEnv):
         # Keep track of agents that were active at the start of the step
         # These agents must be in the return dictionaries
         active_this_step = self.agents[:]
-        
+
         # Clear rewards from previous step
         self.rewards = {agent: 0 for agent in active_this_step}
         
