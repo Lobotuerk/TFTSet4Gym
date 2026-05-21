@@ -2,107 +2,23 @@ from . import config
 import functools
 import gymnasium as gym
 import numpy as np
-from gymnasium.spaces import MultiDiscrete, Box, Dict, Tuple
+from gymnasium.spaces import MultiDiscrete, Box, Dict
 from . import pool
 from .player import Player as player_class
 from .step_function import Step_Function
 from .game_round import Game_Round
 from .observation import Observation
 from .observation_schema import OBSERVATION_REGISTRY
-from pettingzoo.utils.env import AECEnv
-from pettingzoo.utils import wrappers
-from pettingzoo.utils import AgentSelector
-from pettingzoo.utils.conversions import parallel_wrapper_fn
-
-
-def env(rank):
-    """
-    The env function often wraps the environment in wrappers by default.
-    You can find full documentation for these methods
-    elsewhere in the developer pettingzoo documentation.
-    """
-    local_env = TFT_Simulator(env_config=None, rank=rank)
-
-    # Provides a wide vareity of helpful user errors
-    # Strongly recommended
-    local_env = wrappers.OrderEnforcingWrapper(local_env)
-    return local_env
-
-
 from pettingzoo.utils.env import ParallelEnv
 
 
-class TFTParallelWrapper(ParallelEnv):
-    """Custom parallel wrapper that ensures agents and num_agents are always accessible."""
-    
-    def __init__(self, aec_env_fn, rank=0):
-        from pettingzoo.utils.conversions import aec_to_parallel_wrapper
-        self.aec_env = aec_env_fn(rank)
-        self.par_env = aec_to_parallel_wrapper(self.aec_env)
-        self._possible_agents = self.aec_env.possible_agents
-        
-        # Initialize required ParallelEnv attributes
-        self.agents = self._get_current_agents()
-    
-    def _get_current_agents(self):
-        """Get current agents. Always accessible."""
-        try:
-            if hasattr(self.aec_env, 'agents') and self.aec_env.agents is not None:
-                # Return only live agents (those not terminated)
-                live_agents = []
-                for agent in self.aec_env.agents:
-                    if not getattr(self.aec_env, 'terminations', {}).get(agent, False):
-                        live_agents.append(agent)
-                return live_agents
-        except Exception as e:
-            print(f"Error getting current agents: {e}")
-        return self._possible_agents[:]
-    
-    def reset(self, seed=None, options=None):
-        """Reset and update agents."""
-        result = self.par_env.reset(seed=seed, options=options)
-        self.agents = self._get_current_agents()
-        return result
-    
-    def step(self, actions):
-        """Step and update agents."""
-        result = self.par_env.step(actions)
-        self.agents = self._get_current_agents()
-        return result
-
-    def render(self):
-        """Render the environment."""
-        return self.aec_env.render()
-    
-    @property 
-    def num_agents(self):
-        """Get number of current agents."""
-        return len(self.agents)
-    
-    def state(self):
-        """Return the global state from the underlying AEC environment."""
-        return self.aec_env.state()
-    
-    def action_space(self, agent):
-        """Return action space for the given agent."""
-        return self.aec_env.action_space(agent)
-    
-    def observation_space(self, agent):
-        """Return observation space for the given agent."""
-        return self.aec_env.observation_space(agent)
-    
-    def __getattr__(self, name):
-        """Delegate all other attributes to the parallel environment."""
-        return getattr(self.par_env, name)
-
-
 def parallel_env(rank=0):
-    """Create a parallel environment with proper agents/num_agents support."""
-    return TFTParallelWrapper(env, rank)
+    """Create a parallel environment."""
+    return TFT_Simulator(env_config=None, rank=rank)
 
 
-class TFT_Simulator(AECEnv):
-    metadata = {"is_parallelizable": True, "name": "tft-set4-v0"}
+class TFT_Simulator(ParallelEnv):
+    metadata = {"is_parallelizable": True, "name": "tft-set4-v0", "render_modes": []}
 
     def __init__(self, env_config, rank):
         self.pool_obj = pool.pool()
@@ -119,7 +35,6 @@ class TFT_Simulator(AECEnv):
         self.step_function = Step_Function(self.pool_obj, self.game_observations)
         self.game_round = Game_Round(self.PLAYERS, self.pool_obj, self.step_function, rank)
         self.actions_taken = 0
-        self.actions_taken_this_turn = 0
         self.game_round.play_game_round()
         for key, p in self.PLAYERS.items():
             self.step_function.generate_shop(key, p)
@@ -130,45 +45,30 @@ class TFT_Simulator(AECEnv):
         self.kill_list = []
         self.agent_name_mapping = dict(
             zip(self.possible_agents, list(range(len(self.possible_agents)))))
-        self._agent_selector = AgentSelector(self.possible_agents)
-        self.agent_selection = self.possible_agents[0]
 
-        self.rewards = {agent: 0 for agent in self.agents}
-        self._cumulative_rewards = {agent: 0 for agent in self.agents}
-        self.terminations = {agent: False for agent in self.agents}
-        self.truncations = {agent: False for agent in self.agents}
-        self.infos = {agent: {"state_empty": False} for agent in self.agents}
-        self.observations = {agent: {} for agent in self.agents}
-        self.actions = {agent: {} for agent in self.agents}
-
-        # For MuZero
-        # self.observation_spaces: Dict = dict(
-        #     zip(self.agents,
-        #         [Box(low=(-5.0), high=5.0, shape=(config.NUM_PLAYERS, config.OBSERVATION_SIZE,),
-        #              dtype=np.float32) for _ in self.possible_agents])
-        # )
+        self.rewards = {agent: 0 for agent in self.possible_agents}
+        self.terminations = {agent: False for agent in self.possible_agents}
+        self.truncations = {agent: False for agent in self.possible_agents}
+        self.infos = {agent: {"state_empty": False} for agent in self.possible_agents}
+        self.observations = {agent: {} for agent in self.possible_agents}
 
         # For PPO - Use schema-based observation spaces
         schema_config = OBSERVATION_REGISTRY.get_combined_schema_config()
         self.observation_spaces = dict(
             zip(
-                self.agents,
+                self.possible_agents,
                 [
                     Dict({
                         "tensor": Box(**schema_config["tensor"]),
                         "action_mask": Box(**schema_config["action_mask"])
-                    }) for _ in self.agents
+                    }) for _ in self.possible_agents
                 ],
             )
         )
 
-        # For MuZero
-        # self.action_spaces = {agent: MultiDiscrete([config.ACTION_DIM for _ in range(config.NUM_PLAYERS)])
-        #                       for agent in self.agents}
-
         # For PPO
         self.action_spaces = {agent: MultiDiscrete(config.ACTION_DIM)
-                              for agent in self.agents}
+                              for agent in self.possible_agents}
         super().__init__()
     
     def get_observation_field(self, agent: str, field_name: str):
@@ -191,12 +91,12 @@ class TFT_Simulator(AECEnv):
             schema_config = OBSERVATION_REGISTRY.get_combined_schema_config()
             self.observation_spaces = dict(
                 zip(
-                    self.agents,
+                    self.possible_agents,
                     [
                         Dict({
                             "tensor": Box(**schema_config["tensor"]),
                             "action_mask": Box(**schema_config["action_mask"])
-                        }) for _ in self.agents
+                        }) for _ in self.possible_agents
                     ],
                 )
             )
@@ -225,9 +125,6 @@ class TFT_Simulator(AECEnv):
                     num_alive += 1
         return num_alive
 
-    def observe(self, player_id):
-        return self.observations[player_id]
-
     def reset(self, seed=None, options=None):
         self.pool_obj = pool.pool()
         self.PLAYERS = {"player_" + str(player_id): player_class(self.pool_obj, player_id)
@@ -245,17 +142,12 @@ class TFT_Simulator(AECEnv):
         self.step_function.generate_shop_vectors(self.PLAYERS)
 
         self.agents = self.possible_agents.copy()
-        self._agent_selector = AgentSelector(self.agents)
-        self.agent_selection = self._agent_selector.next()
 
         self.terminations = {agent: False for agent in self.agents}
         self.truncations = {agent: False for agent in self.agents}
 
         self.infos = {agent: {"state_empty": False} for agent in self.agents}
-        self.actions = {agent: {} for agent in self.agents}
-
         self.rewards = {agent: 0 for agent in self.agents}
-        self._cumulative_rewards = {agent: 0 for agent in self.agents}
 
         for agent in self.agents:
             self.PLAYERS[agent].turns_for_combat = config.ACTIONS_PER_TURN
@@ -263,11 +155,7 @@ class TFT_Simulator(AECEnv):
         self.observations = {agent: self.game_observations[agent].observation(
             agent, self.PLAYERS[agent]) for agent in self.agents}
 
-        self._agent_selector.reinit(self.agents)
-        self.agent_selection = self._agent_selector.next()
-
-        super().__init__()
-        return self.observations
+        return self.observations, self.infos
 
     def render(self):
         """
@@ -279,109 +167,98 @@ class TFT_Simulator(AECEnv):
     def state(self):
         """
         Returns the global state of the environment as a numpy array.
-        For TFT, this represents the combined state of all players.
         """
         if not hasattr(self, 'observations') or not self.observations:
-            # Return empty state if no observations are available
             return np.array([])
         
-        # Concatenate all player observations into a global state
-        # Since observations are complex (dict with tensor and mask),
-        # we'll use the tensor part and flatten it
         state_components = []
-        for agent in sorted(self.possible_agents):  # Use sorted for consistent ordering
+        for agent in sorted(self.possible_agents):
             if agent in self.observations and 'tensor' in self.observations[agent]:
                 tensor_obs = self.observations[agent]['tensor']
-                # Flatten the tensor observation
                 flattened = np.asarray(tensor_obs).flatten()
                 state_components.append(flattened)
         
         if state_components:
             return np.concatenate(state_components)
         else:
-            # Fallback: return a simple state representation
             return np.array([len(self.agents), self.NUM_DEAD])
 
     def close(self):
-        self.reset()
+        pass
 
-    def step(self, action):
-        # step for dead agents
-        if self.terminations[self.agent_selection]:
-            self._was_dead_step(action)
-            return
-        action = np.asarray(action)
-        self.step_function.batch_2d_controller(action, self.PLAYERS[self.agent_selection], self.PLAYERS,
-                                                   self.agent_selection, self.game_observations)
+    def step(self, actions):
+        """
+        Step function for parallel environment.
+        actions: a dictionary of actions for each agent
+        """
+        # Clear rewards from previous step
+        self.rewards = {agent: 0 for agent in self.agents}
+        
+        # Apply actions for all active agents
+        for agent, action in actions.items():
+            if agent in self.agents and not self.terminations.get(agent, False):
+                action = np.asarray(action)
+                self.step_function.batch_2d_controller(action, self.PLAYERS[agent], self.PLAYERS,
+                                                           agent, self.game_observations)
+                self.infos[agent] = {"state_empty": self.PLAYERS[agent].state_empty()}
 
-        # if we don't use this line, rewards will compound per step
-        # (e.g. if player 1 gets reward in step 1, he will get rewards in steps 2-8)
-        self._clear_rewards()
-        self.infos[self.agent_selection] = {"state_empty": self.PLAYERS[self.agent_selection].state_empty()}
+        self.actions_taken += 1
 
-        self.terminations = {a: False for a in self.agents}
-        self.truncations = {a: False for a in self.agents}
-        for agent in self.agents:
-            self.PLAYERS[agent].turns_for_combat = config.ACTIONS_PER_TURN - self.actions_taken
-            self.observations[agent] = self.game_observations[agent].observation(
-                agent, self.PLAYERS[agent])
+        # If we have reached the end of the turn for all agents
+        if self.actions_taken >= config.ACTIONS_PER_TURN:
+            self.actions_taken = 0
+            self.game_round.play_game_round()
 
-        # Also called in many environments but the line above this does the same thing but better
-        # self._accumulate_rewards()
-        if self._agent_selector.is_last():
-            self.actions_taken += 1
+            # Check if the game is over
+            if self.check_dead() <= 1 or self.game_round.current_round > 48:
+                for agent in self.agents:
+                    if self.PLAYERS[agent] and self.PLAYERS[agent].health > 0:
+                        self.rewards[agent] += 250
+                        self.PLAYERS[agent] = None
 
-            # If at the end of the turn
-            if self.actions_taken >= config.ACTIONS_PER_TURN:
-                # Take a game action and reset actions taken
-                self.actions_taken = 0
-                self.game_round.play_game_round()
+                self.terminations = {a: True for a in self.agents}
+                self.agents = []
 
-                # Check if the game is over
-                if self.check_dead() <= 1 or self.game_round.current_round > 48:
-                    # Anyone left alive (should only be 1 player unless time limit) wins the game
-                    for player_id in self.agents:
-                        if self.PLAYERS[player_id] and self.PLAYERS[player_id].health > 0:
-                            self.rewards[player_id] = 250
-                            self._cumulative_rewards[player_id] = self.rewards[player_id]
-                            self.PLAYERS[player_id] = None  # Without this the reward is reset
-
-                    self.terminations = {a: True for a in self.agents}
-
+            if self.agents:
                 self.infos = {a: {"state_empty": False} for a in self.agents}
 
+                # Handle player elimination
                 _live_agents = self.agents[:]
                 for k in self.kill_list:
                     self.terminations[k] = True
-                    self.rewards[k] = (8 - len(_live_agents)) * 25
-                    _live_agents.remove(k)
-                    self._cumulative_rewards[k] = self.rewards[k]
+                    self.rewards[k] += (8 - len(_live_agents)) * 25
+                    if k in _live_agents:
+                        _live_agents.remove(k)
                     self.PLAYERS[k] = None
-                    self.game_round.update_players(self.PLAYERS)
-
-                if len(self.kill_list) > 0:
-                    self._agent_selector.reinit(_live_agents)
-                    # Update the main agents list to reflect eliminated players
-                    self.agents = _live_agents[:]
+                
+                self.game_round.update_players(self.PLAYERS)
+                self.agents = _live_agents[:]
                 self.kill_list = []
 
-                if not all(self.terminations.values()):
+                if not all(self.terminations.values()) and self.agents:
                     self.game_round.start_round()
 
-                    for agent in _live_agents:
-                        self.PLAYERS[agent].turns_for_combat = config.ACTIONS_PER_TURN - self.actions_taken
-                        self.observations[agent] = self.game_observations[agent].observation(
-                            agent, self.PLAYERS[agent])
+        # Update observations and rewards for all agents
+        for agent in self.possible_agents:
+            if agent in self.PLAYERS and self.PLAYERS[agent]:
+                self.PLAYERS[agent].turns_for_combat = config.ACTIONS_PER_TURN - self.actions_taken
+                self.observations[agent] = self.game_observations[agent].observation(
+                    agent, self.PLAYERS[agent])
+                # Add player-specific rewards accumulated during step/round
+                self.rewards[agent] += self.PLAYERS[agent].reward
+                # Reset the reward in the player object so it's not double-counted next step
+                self.PLAYERS[agent].reward = 0
 
-            for player_id in self.PLAYERS:
-                if self.PLAYERS[player_id]:
-                    self.rewards[player_id] = self.PLAYERS[player_id].reward
-                    self._cumulative_rewards[player_id] = self.rewards[player_id]
+        # PettingZoo ParallelEnv expects only entries for current agents
+        # except when they just terminated.
+        # However, for simplicity and robustness, we can return what we have, 
+        # but technically it should be filtered.
+        
+        out_obs = {a: self.observations[a] for a in self.agents}
+        out_rewards = {a: self.rewards[a] for a in self.agents}
+        out_terminations = {a: self.terminations.get(a, False) for a in self.agents}
+        out_truncations = {a: self.truncations.get(a, False) for a in self.agents}
+        out_infos = {a: self.infos[a] for a in self.agents}
 
-        # I think this if statement is needed in case all the agents die to the same minion round. a little sad.
-        if len(self._agent_selector.agent_order):
-            self.agent_selection = self._agent_selector.next()
+        return out_obs, out_rewards, out_terminations, out_truncations, out_infos
 
-        # Probably not needed but doesn't hurt?
-        self._deads_step_first()
-        return self.observations, self.rewards, self.terminations, self.truncations, self.infos
