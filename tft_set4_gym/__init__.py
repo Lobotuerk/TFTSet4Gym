@@ -1,6 +1,6 @@
-from .tft_simulator import TFT_Simulator, parallel_env, env
+from .tft_simulator import TFT_Simulator, parallel_env
 
-__all__ = ['TFT_Simulator', 'parallel_env', 'env']
+__all__ = ['TFT_Simulator', 'parallel_env']
 
 # Initialize observation schema and update config
 try:
