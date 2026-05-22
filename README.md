@@ -21,6 +21,11 @@ cd TFT-Set4-Gym
 pip install -e .
 ```
 
+### Import
+```python
+from TFTSet4Gym.tft_set4_gym import parallel_env
+```
+
 ### From PyPI (coming soon)
 ```bash
 pip install tft-set4-gym
@@ -30,7 +35,7 @@ pip install tft-set4-gym
 
 ### Basic Usage
 ```python
-from tft_set4_gym import parallel_env
+from TFTSet4Gym.tft_set4_gym import parallel_env
 
 # Create environment
 env = parallel_env()
@@ -55,7 +60,7 @@ env.close()
 
 ### With Stable Baselines 3
 ```python
-from tft_set4_gym import TFTSingleAgentWrapper
+from TFTSet4Gym.tft_set4_gym import TFTSingleAgentWrapper
 from stable_baselines3 import PPO
 
 # Create single-agent wrapper for SB3
@@ -125,7 +130,7 @@ action_space = MultiDiscrete([7, 37, 10])
 
 ### Custom Configurations
 ```python
-from tft_set4_gym import parallel_env
+from TFTSet4Gym.tft_set4_gym import parallel_env
 
 # Custom game settings
 env = parallel_env(
@@ -137,7 +142,7 @@ env = parallel_env(
 
 ### Environment Wrappers
 ```python
-from tft_set4_gym.wrappers import (
+from TFTSet4Gym.tft_set4_gym.wrappers import (
     RewardShapingWrapper,
     ActionMaskingWrapper,
     ObservationWrapper
@@ -175,8 +180,8 @@ pytest tests/
 
 ### Code Formatting
 ```bash
-black tft_set4_gym/
-isort tft_set4_gym/
+black TFTSet4Gym/tft_set4_gym/
+isort TFTSet4Gym/tft_set4_gym/
 ```
 
 ### Contributing

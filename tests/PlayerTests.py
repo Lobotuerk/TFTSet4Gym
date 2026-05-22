@@ -10,13 +10,13 @@ import os
 # Add the package root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from tft_set4_gym.observation import Observation
-from tft_set4_gym.player import Player
-from tft_set4_gym.pool import pool
-from tft_set4_gym.champion import champion
-from tft_set4_gym import champion as c_object
-from tft_set4_gym.item_stats import trait_items, starting_items
-from tft_set4_gym.utils import champ_id_from_name, player_map_from_obs
+from TFTSet4Gym.tft_set4_gym.observation import Observation
+from TFTSet4Gym.tft_set4_gym.player import Player
+from TFTSet4Gym.tft_set4_gym.pool import pool
+from TFTSet4Gym.tft_set4_gym.champion import champion
+from TFTSet4Gym.tft_set4_gym import champion as c_object
+from TFTSet4Gym.tft_set4_gym.item_stats import trait_items, starting_items
+from TFTSet4Gym.tft_set4_gym.utils import champ_id_from_name, player_map_from_obs
 
 
 def setup(player_num=0) -> Player:

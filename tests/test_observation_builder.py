@@ -1,8 +1,8 @@
 import pytest
 import numpy as np
-from tft_set4_gym.observation_builder import ObservationBuilder, ObservationManagerMixin
-from tft_set4_gym.player import Player, encoded_list, encode_champ_object
-from tft_set4_gym.stats import COST
+from TFTSet4Gym.tft_set4_gym.observation_builder import ObservationBuilder, ObservationManagerMixin
+from TFTSet4Gym.tft_set4_gym.player import Player, encoded_list, encode_champ_object
+from TFTSet4Gym.tft_set4_gym.stats import COST
 from unittest.mock import MagicMock
 
 class MockPool:
@@ -215,9 +215,9 @@ def test_observation_manager_mixin():
 @pytest.mark.unit
 @pytest.mark.observation
 def test_convenience_functions():
-    from tft_set4_gym.observation_builder import build_observation, get_field_slice as obs_get_field_slice, \
+    from TFTSet4Gym.tft_set4_gym.observation_builder import build_observation, get_field_slice as obs_get_field_slice, \
         get_field_value_from_obs, set_field_value_in_obs, update_config_observation_size
-    from tft_set4_gym import config
+    from TFTSet4Gym.tft_set4_gym import config
     
     pool = MockPool()
     player = Player(pool, 0)

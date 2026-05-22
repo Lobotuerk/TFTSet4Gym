@@ -10,10 +10,10 @@ import numpy as np
 # Add the package root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from tft_set4_gym.player import Player
-from tft_set4_gym.pool import pool
-from tft_set4_gym.champion import champion
-from tft_set4_gym import config
+from TFTSet4Gym.tft_set4_gym.player import Player
+from TFTSet4Gym.tft_set4_gym.pool import pool
+from TFTSet4Gym.tft_set4_gym.champion import champion
+from TFTSet4Gym.tft_set4_gym import config
 
 def setup_player(player_num=0) -> Player:
     """Creates fresh player and pool"""

@@ -53,7 +53,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "tft-demo=tft_set4_gym.demo:main",
+            "tft-demo=TFTSet4Gym.tft_set4_gym.demo:main",
         ],
     },
     include_package_data=True,

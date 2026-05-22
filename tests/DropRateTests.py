@@ -12,10 +12,10 @@ import os
 # Add the package root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from tft_set4_gym.player import Player
-from tft_set4_gym.pool import pool
-from tft_set4_gym.champion import champion
-from tft_set4_gym.pool import COST_1, COST_2, COST_3, COST_4, COST_5
+from TFTSet4Gym.tft_set4_gym.player import Player
+from TFTSet4Gym.tft_set4_gym.pool import pool
+from TFTSet4Gym.tft_set4_gym.champion import champion
+from TFTSet4Gym.tft_set4_gym.pool import COST_1, COST_2, COST_3, COST_4, COST_5
 
 # Verify shop drop rates for each cost are correct
 

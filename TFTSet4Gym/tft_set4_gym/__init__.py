@@ -11,5 +11,5 @@ except ImportError:
 
 # register(
 #     id="TFT_Set4-v0", 
-#     entry_point="tft_set4_gym.tft_simulator:TFT_Simulator"
+#     entry_point="TFTSet4Gym.tft_set4_gym.tft_simulator:TFT_Simulator"
 # )

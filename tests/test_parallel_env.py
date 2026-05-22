@@ -18,7 +18,7 @@ from typing import Dict, Any
 from pettingzoo.test import parallel_api_test
 from pettingzoo.utils.env import ParallelEnv
 
-from tft_set4_gym.tft_simulator import parallel_env
+from TFTSet4Gym.tft_set4_gym.tft_simulator import parallel_env
 
 
 @pytest.mark.parallel

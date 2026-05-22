@@ -9,10 +9,10 @@ import os
 # Add the package root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from tft_set4_gym.player import Player
-from tft_set4_gym.pool import pool
-from tft_set4_gym.champion import champion
-from tft_set4_gym import minion
+from TFTSet4Gym.tft_set4_gym.player import Player
+from TFTSet4Gym.tft_set4_gym.pool import pool
+from TFTSet4Gym.tft_set4_gym.champion import champion
+from TFTSet4Gym.tft_set4_gym import minion
 
 # contains the list of round numbers where unique PVE rounds occur
 rounds = [0,1,2,8,14,20,26,33]

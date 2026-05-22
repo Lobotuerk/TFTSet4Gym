@@ -12,7 +12,7 @@ import os
 # Add the package root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from tft_set4_gym.tft_simulator import parallel_env
+from TFTSet4Gym.tft_set4_gym.tft_simulator import parallel_env
 
 
 @pytest.mark.integration
