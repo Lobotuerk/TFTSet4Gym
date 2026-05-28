@@ -41,83 +41,104 @@ class ActionTranslationModule:
                 bench.append((i, self.name_to_idx[champ.name]))
         return bench
 
-    def _find_bench_vacancy(self, player, used_positions: set) -> int:
-        for i in range(BENCH_SIZE):
-            if i not in used_positions and player.bench[i] is None:
-                return i
-        return None
-
     def translate(self, board_probs: torch.Tensor, player, shop_slots: list = None) -> list:
         target_board = self.decode_target_board(board_probs)[0]
-        current_board = self.get_current_board(player)
-        bench = self.get_current_bench(player)
+
+        current_board = self.get_current_board(player).copy()
+        bench_state = [None] * BENCH_SIZE
+        for pos, idx in self.get_current_bench(player):
+            bench_state[pos] = idx
 
         actions = []
-        used_from_bench = set()
-        placed_on_board = set()
 
-        bench_inventory = {}
-        for bench_pos, champ_idx in bench:
-            bench_inventory.setdefault(champ_idx, []).append(bench_pos)
-
-        target_positions = {}
         for y in range(BOARD_HEIGHT):
             for x in range(BOARD_WIDTH):
-                t = target_board[y, x]
-                if t != EMPTY_CLASS:
-                    target_positions.setdefault(int(t), []).append((x, y))
+                target_c = int(target_board[y, x])
+                current_c = int(current_board[y, x])
 
-        with_pending_board = set()
-        for y in range(BOARD_HEIGHT):
-            for x in range(BOARD_WIDTH):
-                target_champ = int(target_board[y, x])
-                current_champ = int(current_board[y, x])
-                if target_champ == EMPTY_CLASS or current_champ == target_champ:
+                if target_c == EMPTY_CLASS:
                     continue
-                if current_champ == EMPTY_CLASS:
-                    if target_champ in bench_inventory and bench_inventory[target_champ]:
-                        bench_pos = bench_inventory[target_champ].pop(0)
-                        used_from_bench.add(bench_pos)
-                        dcord = y * BOARD_WIDTH + x
-                        bench_dcord = bench_pos + BOARD_SIZE
-                        actions.append([1, bench_dcord, dcord])
-                        placed_on_board.add((x, y))
-
-        for y in range(BOARD_HEIGHT):
-            for x in range(BOARD_WIDTH):
-                if (x, y) in placed_on_board:
+                if current_c == target_c:
                     continue
-                target_champ = int(target_board[y, x])
-                current_champ = int(current_board[y, x])
 
-                if target_champ == EMPTY_CLASS and current_champ != EMPTY_CLASS:
-                    dcord = y * BOARD_WIDTH + x
-                    actions.append([3, dcord, 0])
+                src_is_bench = None
+                src_pos = None
 
-                elif target_champ != EMPTY_CLASS and current_champ != target_champ:
-                    if target_champ in bench_inventory and bench_inventory[target_champ]:
-                        bench_pos = bench_inventory[target_champ].pop(0)
-                        used_from_bench.add(bench_pos)
-                        dcord = y * BOARD_WIDTH + x
-                        bench_dcord = bench_pos + BOARD_SIZE
-                        actions.append([1, bench_dcord, dcord])
-                        placed_on_board.add((x, y))
-
-        remaining_bench = [(pos, idx) for pos, idx in bench if pos not in used_from_bench]
-        for bench_pos, champ_idx in remaining_bench:
-            for y in range(BOARD_HEIGHT):
-                for x in range(BOARD_WIDTH):
-                    if (x, y) in placed_on_board:
-                        continue
-                    if int(target_board[y, x]) == champ_idx:
-                        dcord = y * BOARD_WIDTH + x
-                        bench_dcord = bench_pos + BOARD_SIZE
-                        actions.append([1, bench_dcord, dcord])
-                        placed_on_board.add((x, y))
+                for bp, bi in enumerate(bench_state):
+                    if bi == target_c:
+                        src_is_bench = True
+                        src_pos = bp
                         break
-                else:
+
+                if src_is_bench is None:
+                    for by in range(BOARD_HEIGHT):
+                        for bx in range(BOARD_WIDTH):
+                            if by == y and bx == x:
+                                continue
+                            if int(current_board[by, bx]) == target_c:
+                                src_is_bench = False
+                                src_pos = by * BOARD_WIDTH + bx
+                                break
+                        if src_is_bench is not None:
+                            break
+
+                if src_is_bench is None:
                     continue
-                break
+
+                dcord = y * BOARD_WIDTH + x
+                current_c = int(current_board[y, x])
+
+                if src_is_bench:
+                    bench_dcord = src_pos + BOARD_SIZE
+                    actions.append([1, bench_dcord, dcord])
+                    bench_state[src_pos] = None
+                    if current_c != EMPTY_CLASS:
+                        bench_state[src_pos] = current_c
+                    current_board[y, x] = target_c
+                else:
+                    src_y, src_x = divmod(src_pos, BOARD_WIDTH)
+                    actions.append([1, src_pos, dcord])
+                    current_board[y, x] = target_c
+                    current_board[src_y, src_x] = current_c if current_c != EMPTY_CLASS else EMPTY_CLASS
+
+        for y in range(BOARD_HEIGHT):
+            for x in range(BOARD_WIDTH):
+                current_c = int(current_board[y, x])
+                target_c = int(target_board[y, x])
+
+                if current_c == EMPTY_CLASS:
+                    continue
+                if target_c != EMPTY_CLASS:
+                    continue
+
+                needed = False
+                for ty in range(BOARD_HEIGHT):
+                    for tx in range(BOARD_WIDTH):
+                        if (int(target_board[ty, tx]) == current_c
+                                and int(current_board[ty, tx]) != current_c):
+                            needed = True
+                            break
+                    if needed:
+                        break
+
+                if needed:
+                    continue
+
+                dcord = y * BOARD_WIDTH + x
+                bench_vacancy = None
+                for i in range(BENCH_SIZE):
+                    if bench_state[i] is None:
+                        bench_vacancy = i
+                        break
+
+                if bench_vacancy is not None:
+                    bench_dcord = bench_vacancy + BOARD_SIZE
+                    actions.append([1, dcord, bench_dcord])
+                    bench_state[bench_vacancy] = current_c
+                    current_board[y, x] = EMPTY_CLASS
+                else:
+                    actions.append([3, dcord, 0])
+                    current_board[y, x] = EMPTY_CLASS
 
         if not actions:
             actions.append([0, 0, 0])

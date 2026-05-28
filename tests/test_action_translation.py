@@ -127,7 +127,7 @@ def test_translate_bench_to_board():
     assert 1 in action_types
 
 
-def test_translate_sell_unwanted():
+def test_translate_board_to_bench():
     champ_names = [n for n in list(COST.keys()) if n != " " and COST[n] > 0]
 
     class MockChamp:
@@ -147,7 +147,88 @@ def test_translate_sell_unwanted():
     probs[0, EMPTY_CLASS, :, :] = 1.0
     actions = module.translate(probs, player)
     action_types = [a[0] for a in actions]
-    assert 3 in action_types
+    assert 1 in action_types, "should move to bench, not sell"
+    for a in actions:
+        if a[0] == 1:
+            assert a[2] >= BOARD_SIZE, "board-to-bench should target bench dcord >= 28"
+
+
+def test_translate_sell_when_bench_full():
+    champ_names = [n for n in list(COST.keys()) if n != " " and COST[n] > 0]
+
+    class MockChamp:
+        def __init__(self, name):
+            self.name = name
+
+    class MockPlayer:
+        def __init__(self):
+            self.board = [[None for _ in range(4)] for _ in range(7)]
+            self.bench = [None for _ in range(9)]
+
+    player = MockPlayer()
+    player.board[0][0] = MockChamp(champ_names[5])
+    for i in range(9):
+        player.bench[i] = MockChamp(champ_names[(i + 10) % NUM_CHAMPIONS])
+
+    module = ActionTranslationModule()
+    probs = torch.zeros(1, NUM_CHAMPIONS + 1, BOARD_HEIGHT, BOARD_WIDTH)
+    probs[0, EMPTY_CLASS, :, :] = 1.0
+    actions = module.translate(probs, player)
+    action_types = [a[0] for a in actions]
+    assert 3 in action_types, "should sell when bench is full"
+
+
+def test_translate_board_to_board():
+    champ_names = [n for n in list(COST.keys()) if n != " " and COST[n] > 0]
+
+    class MockChamp:
+        def __init__(self, name):
+            self.name = name
+
+    class MockPlayer:
+        def __init__(self):
+            self.board = [[None for _ in range(4)] for _ in range(7)]
+            self.bench = [None for _ in range(9)]
+
+    player = MockPlayer()
+    player.board[0][0] = MockChamp(champ_names[5])
+    player.board[1][0] = MockChamp(champ_names[3])
+
+    module = ActionTranslationModule()
+    probs = torch.zeros(1, NUM_CHAMPIONS + 1, BOARD_HEIGHT, BOARD_WIDTH)
+    probs[0, EMPTY_CLASS, :, :] = 0.0
+    probs[0, 3, 0, 0] = 1.0
+    probs[0, 5, 1, 0] = 1.0
+    actions = module.translate(probs, player)
+    board_to_board_moves = [a for a in actions if a[0] == 1 and a[1] < BOARD_SIZE and a[2] < BOARD_SIZE]
+    assert len(board_to_board_moves) >= 1
+
+
+def test_translate_keep_champ_needed_elsewhere():
+    champ_names = [n for n in list(COST.keys()) if n != " " and COST[n] > 0]
+
+    class MockChamp:
+        def __init__(self, name):
+            self.name = name
+
+    class MockPlayer:
+        def __init__(self):
+            self.board = [[None for _ in range(4)] for _ in range(7)]
+            self.bench = [None for _ in range(9)]
+
+    player = MockPlayer()
+    player.board[0][0] = MockChamp(champ_names[0])
+    player.board[1][0] = MockChamp(champ_names[1])
+
+    module = ActionTranslationModule()
+    probs = torch.zeros(1, NUM_CHAMPIONS + 1, BOARD_HEIGHT, BOARD_WIDTH)
+    probs[0, EMPTY_CLASS, :, :] = 0.0
+    probs[0, 0, 0, 0] = 1.0
+    probs[0, 1, 0, 1] = 1.0
+    actions = module.translate(probs, player)
+    action_types = [a[0] for a in actions]
+    assert 3 not in action_types, "should not sell champ 0 or 1, both are needed"
+    assert 1 in action_types, "should generate moves to reposition"
 
 
 def test_translate_batch():
