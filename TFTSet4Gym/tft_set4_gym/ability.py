@@ -5,6 +5,7 @@ from . import champion_functions as champion_functions
 from . import item_stats as item_stats
 from . import origin_class as origin_class
 from . import items as items
+from .combat_state import get_state
 import random
 from math import ceil, floor
 
@@ -1003,12 +1004,9 @@ def kayn(champion, data={'redash': False}):
             champion.add_que('execute_function', 350, [kayn, {'redash': True}])
 
 
-kennen_hits = []
-
-
 def kennen(champion):
-    global kennen_hits
-    kennen_hits = list(filter(lambda x: x[0] != champion, kennen_hits))
+    s = get_state()
+    s.kennen_hits = list(filter(lambda x: x[0] != champion, s.kennen_hits))
 
     # for kenny not to ult when there's no targets in range
     # brings some extra cpu load
@@ -1024,7 +1022,7 @@ def kennen(champion):
 
 
 def kennen_ability(champion, data):
-    global kennen_hits
+    s = get_state()
     targets = field.enemies_in_distance(champion, champion.y, champion.x, stats.ABILITY_RADIUS[champion.name])
 
     if not champion.stunned:
@@ -1034,25 +1032,25 @@ def kennen_ability(champion, data):
             found = False
             index = -1
             target = e
-            if len(kennen_hits) > 0:
-                for i, v in enumerate(kennen_hits):
+            if len(s.kennen_hits) > 0:
+                for i, v in enumerate(s.kennen_hits):
                     if v[0] == champion and v[1] == target:
                         found = True
                         index = i
                         break
 
             if found:
-                kennen_hits[index][2] += 1
+                s.kennen_hits[index][2] += 1
             else:
-                kennen_hits.append([champion, target, 1])
-                index = len(kennen_hits) - 1
+                s.kennen_hits.append([champion, target, 1])
+                index = len(s.kennen_hits) - 1
 
-            if kennen_hits[index][2] >= 3:
+            if s.kennen_hits[index][2] >= 3:
                 e.add_que('change_stat', 0, None, 'stunned', True)
                 e.clear_que_stunned_removal()
                 e.add_que('change_stat', stats.ABILITY_STUN_DURATION[champion.name][champion.stars], None, 'stunned',
                           False)
-                kennen_hits[index][2] = 0
+                s.kennen_hits[index][2] = 0
 
 
 def kindred(champion):
@@ -1449,10 +1447,8 @@ def lissandra(champion):
             champion.spell(hex_data, stats.ABILITY_SECONDARY_DMG[champion.name][champion.stars])
 
 
-lulu_targeted = []
-
-
 def lulu(champion):
+    s = get_state()
     default_ability_calls(champion)
     own_team = champion.own_team()
     own_team_hp = []
@@ -1463,7 +1459,7 @@ def lulu(champion):
     own_team_hp = sorted(own_team_hp, key=lambda x: x[1])
 
     for o in own_team_hp:
-        targeted = len(list(filter(lambda x: (x[0] == champion and x[1] == o[0]), lulu_targeted)))
+        targeted = len(list(filter(lambda x: (x[0] == champion and x[1] == o[0]), s.lulu_targeted)))
         hp_amount = stats.ABILITY_HEALTH_GAIN_TOTAL[champion.name][champion.stars] * champion.SP
         if targeted != 0:
             o[0].add_que('change_stat', -1, None, 'max_health', o[0].max_health + hp_amount)
@@ -1474,7 +1470,7 @@ def lulu(champion):
             n.add_que('change_stat', -1, None, 'stunned', True)
             n.clear_que_stunned_removal()
             n.add_que('change_stat', stats.ABILITY_STUN_DURATION[champion.name][champion.stars], None, 'stunned', False)
-        lulu_targeted.append([champion, o[0]])
+        s.lulu_targeted.append([champion, o[0]])
 
         break
 
@@ -1594,24 +1590,21 @@ def morgana(champion):
         champion.add_que('execute_function', current_ms, [morgana_ability, {'coordinates': target, 'ms': current_ms}])
 
 
-morgana_MR_list = []
-
-
 def morgana_ability(champion, data):
-    global morgana_MR_list
+    s = get_state()
     targets = field.enemies_in_distance(champion, data['coordinates'][0], data['coordinates'][1],
                                         stats.ABILITY_RADIUS[champion.name])
 
     for t in targets:
         # if that unit hasn't been targeted by this morgana yet
-        if len(list(filter(lambda x: (x[0] == champion and x[1] == t), morgana_MR_list))) == 0:
+        if len(list(filter(lambda x: (x[0] == champion and x[1] == t), s.morgana_MR_list))) == 0:
             ms_left = stats.ABILITY_LENGTH[champion.name] - data['ms']
 
             t.print(' {} {} --> {}'.format('MR', t.MR, t.MR * stats.ABILITY_MR_DECREASE[champion.name]))
             t.MR *= stats.ABILITY_MR_DECREASE[champion.name]
             t.add_que('change_stat', ms_left, None, 'MR', None, {'morgana': stats.ABILITY_MR_DECREASE[champion.name]})
 
-            morgana_MR_list.append([champion, t])
+            s.morgana_MR_list.append([champion, t])
 
         champion.spell(t, stats.ABILITY_DMG[champion.name][champion.stars] / stats.ABILITY_SLICES[champion.name])
 
@@ -1625,7 +1618,7 @@ def morgana_ability(champion, data):
     # clear the list at the end of the last slice
     if (data['ms'] == stats.ABILITY_LENGTH[champion.name] - (
             stats.ABILITY_LENGTH[champion.name] / stats.ABILITY_SLICES[champion.name])):
-        morgana_MR_list = list(filter(lambda x: (x[0] != champion), morgana_MR_list))
+        s.morgana_MR_list = list(filter(lambda x: (x[0] != champion), s.morgana_MR_list))
 
 
 def nami(champion):
@@ -1782,31 +1775,27 @@ def pyke_ability(champion, data):
                 champion.spell(c, stats.ABILITY_DMG[champion.name][champion.stars])
 
 
-riven_counter = []
-riven_identifier_list = []
-
-
 def riven(champion):
+    s = get_state()
     if riven_helper(champion, {}):
 
-        global riven_counter
         default_ability_calls(champion)
         # riven_counter needs to sustain multiple rivens on the field,
         # so there's gonna be every riven's data on the same array
         found = False
         index = -1
-        if len(riven_counter) > 0:
-            for i, v in enumerate(riven_counter):
+        if len(s.riven_counter) > 0:
+            for i, v in enumerate(s.riven_counter):
                 if v[0] == champion:
                     found = True
                     index = i
                     break
 
         if found:
-            riven_counter[index][1] += 1
+            s.riven_counter[index][1] += 1
         else:
-            riven_counter.append([champion, 1])
-            index = len(riven_counter) - 1
+            s.riven_counter.append([champion, 1])
+            index = len(s.riven_counter) - 1
 
         if len(champion.enemy_team()) > 0:
             if not champion.target:
@@ -1820,7 +1809,7 @@ def riven(champion):
             coords = field.coordinates
 
             # the wave of damage
-            if riven_counter[index][1] == 3:
+            if s.riven_counter[index][1] == 3:
 
                 # target_hex = [[champion.target.y, champion.target.x]]
                 corner_neighbors = []
@@ -1849,13 +1838,13 @@ def riven(champion):
                     slash_hexes.append(corner_neighbors[0])
                     slash_hexes.append(corner_neighbors[1])
 
-                    for s in slash_hexes:
-                        if s[0] < 8 and s[1] < 7:
-                            c = coords[s[0]][s[1]]
+                    for sh in slash_hexes:
+                        if sh[0] < 8 and sh[1] < 7:
+                            c = coords[sh[0]][sh[1]]
                             if c and c.team != champion.team and c.champion:
                                 champion.spell(c, stats.ABILITY_SECONDARY_DMG[champion.name][champion.stars])
 
-                riven_counter[index][1] = 0
+                s.riven_counter[index][1] = 0
 
             # first dash to a furthest free neighboring hex of the target
             # then get a shield / reset the shield
@@ -1876,13 +1865,13 @@ def riven(champion):
                 shield_identifier = champion_functions.MILLIS() * stats.SHIELD_AMOUNT[champion.name][
                     champion.stars] * champion.SP
                 shield_amount = stats.SHIELD_AMOUNT[champion.name][champion.stars] * champion.SP
-                if shield_identifier in riven_identifier_list:
+                if shield_identifier in s.riven_identifier_list:
                     champion.add_que('shield', 0, None, None,
                                      {'amount': shield_amount + 0.001, 'identifier': shield_identifier,
                                       'applier': champion, 'original_amount': shield_amount + 0.001},
                                      {'increase': True})
 
-                riven_identifier_list.append(shield_identifier)
+                s.riven_identifier_list.append(shield_identifier)
 
                 champion.add_que('shield', 0, None, None,
                                  {'amount': shield_amount, 'identifier': shield_identifier, 'applier': champion,
@@ -2419,10 +2408,8 @@ def veigar(champion):
         champion.print(' {} {} --> {}'.format('SP', round(start_value, 2), round(champion.SP, 2)))
 
 
-vi_armor_list = []
-
-
 def vi(champion):
+    s = get_state()
     default_ability_calls(champion)
     target = champion.target
     distance = field.distance(champion, target, True)
@@ -2455,7 +2442,7 @@ def vi(champion):
                 # check how long ago the target's armor was reduced last time by this vi
                 # the armor list elements are of syntax: [reducer, target, milliseconds_when_last_reduced]
                 # search for target entries
-                armor_history = (list(filter(lambda x: x[1] == c, vi_armor_list)))
+                armor_history = (list(filter(lambda x: x[1] == c, s.vi_armor_list)))
                 can_be_changed = False
                 for ar in armor_history:
                     # there can be multiple vis, so make sure that this entry was done by the current vi
@@ -2479,7 +2466,7 @@ def vi(champion):
                     c.add_que('change_stat', stats.ABILITY_LENGTH[champion.name], None, 'armor', None,
                               {'vi': stats.ABILITY_ARMOR_DECREASE[champion.name][champion.stars]})
 
-                    vi_armor_list.append([champion, c, champion_functions.MILLIS()])
+                    s.vi_armor_list.append([champion, c, champion_functions.MILLIS()])
 
                 champion.spell(c, stats.ABILITY_DMG[champion.name][champion.stars])
 
@@ -2585,21 +2572,19 @@ def yasuo_ability(champion, data):
     return (possible_hexes)
 
 
-yone_list = []
-yone_checking = False
+
 
 
 # welcome to the loop city
 # the sir lord mayor is named 'for'
 # dude's a dick tho
 def yone(champion):
-    global yone_list
-    global yone_checking
+    s = get_state()
     default_ability_calls(champion)
 
-    if (not yone_checking):
+    if (not s.yone_checking):
         champion.add_que('execute_function', 0, [yone_ability, {'loop': True}])
-        yone_checking = True
+        s.yone_checking = True
 
     coords = field.coordinates
 
@@ -2676,7 +2661,7 @@ def yone(champion):
                         already_targeted.append(c)
                         champion.spell(c, damage_per_enemy)
                         if (c.health > 0):
-                            yone_list.append([champion, c])
+                            s.yone_list.append([champion, c])
             if (yone_helper(champion) > 0):
                 champion.print(
                     ' {} {} --> {}'.format('maxmana', champion.maxmana, stats.SECONDARY_MAXMANA[champion.name]))
@@ -2692,7 +2677,7 @@ def yone(champion):
         # sort the marked enemies by hp and check their neighboring hexes
         # whichever has the first free hex, is going to be the dash target
         marked_enemies = []
-        for y in yone_list:
+        for y in s.yone_list:
             if (y[0] == champion):
                 marked_enemies.append([y[1], y[1].health])
         marked_enemies = sorted(marked_enemies, key=lambda x: x[1])
@@ -2727,10 +2712,10 @@ def yone(champion):
 
 # check if someone on the list has died
 def yone_ability(champion, data):
-    global yone_list
+    s = get_state()
 
     old_length = yone_helper(champion)
-    yone_list = list(filter(lambda x: x[1].health > 0, yone_list))
+    s.yone_list = list(filter(lambda x: x[1].health > 0, s.yone_list))
     new_length = yone_helper(champion)
     if (new_length != old_length):
         champion.print(' list length {} --> {}'.format(old_length, new_length))
@@ -2744,9 +2729,9 @@ def yone_ability(champion, data):
 
 
 def yone_helper(champion):
-    global yone_list
+    s = get_state()
     counter = 0
-    for y in yone_list:
+    for y in s.yone_list:
         if (y[0] == champion):
             counter += 1
     return counter
