@@ -11,6 +11,7 @@ from .stats import AD, HEALTH, ARMOR, MR, AS, RANGE, MANA, MAXMANA, COST, MANALO
     DODGE, INITIATIVE_ACTIVE, ABILITY_LENGTH, DAMAGE_PER_UNIT
 from .champion_functions import attack, die, MILLIS, MILLISECONDS_INCREASE, add_damage_dealt
 from . import ability, active, field, item_stats, items
+from .combat_state import get_state
 
 que = []
 log = []
@@ -783,21 +784,7 @@ def reset_global_variables():
     champion_functions.damage_dealt_teams = {'blue': 0, 'red': 0}
     champion_functions.galio_spawned = {'blue': False, 'red': False}
 
-    # global kennen_hits
-    # global l
-    ability.kennen_hits = []
-    ability.lulu_targeted = []
-    ability.morgana_MR_list = []
-    ability.riven_counter = []
-    ability.riven_identifier_list = []
-    ability.vi_armor_list = []
-    ability.yone_list = []
-    ability.yone_checking = False
-
-    active.jhin_shots = []
-    active.kalista_targets = []
-    active.vayne_targets = []
-    active.zed_counter = []
+    get_state().reset()
 
     field.coordinates = [[None] * 7 for _ in range(8)]
 
