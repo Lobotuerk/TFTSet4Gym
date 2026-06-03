@@ -268,7 +268,7 @@ class champion:
             if trait_damage:
                 trait_string = ' {}'.format(trait_damage)
 
-        if target in team_list:
+            if target in team_list:
 
                 if self.lifesteal_spells > 0 and not item_damage:
                     self.add_que('heal', -1, None, None, damage * self.lifesteal_spells)
