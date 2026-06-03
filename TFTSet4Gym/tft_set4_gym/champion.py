@@ -529,8 +529,8 @@ class champion:
 # This will be an area I will look to optimize on later if need be but for now,
 # I want to keep things as simple as possible.
 def run(champion_q, player_1, player_2, round_damage=0):
-    state = get_state()
     reset_global_variables()
+    state = get_state()
 
     for x in range(0, 7):
         for y in range(0, 4):
