@@ -2,61 +2,50 @@ from . import config as config
 from . import origin_class as origin_class
 from . import origin_class_stats as origin_class_stats
 from . import stats as stats
+from .combat_state import get_state
 import random
 from math import ceil
 from . import ability, active, field, item_stats, items
 from .stats import *
 
-MILLISECONDS = 0
-
 
 def MILLIS():
-    return MILLISECONDS
+    return get_state().MILLISECONDS
 
 
 def MILLISECONDS_INCREASE():
-    global MILLISECONDS
-    MILLISECONDS += 100
-
-
-damage_dealt = []
-damage_dealt_teams = {'blue': 0, 'red': 0}
+    get_state().MILLISECONDS += 100
 
 
 def get_damage_dealt():
-    return damage_dealt
-
-
-galio_spawned = {'blue': False, 'red': False}
+    return get_state().damage_dealt
 
 
 def add_damage_dealt(champion, damage, target):
-    global damage_dealt
-    global damage_dealt_teams
-    global galio_spawned
+    state = get_state()
     added = False
 
     if champion.team == 'blue':
-        damage_dealt_teams['blue'] += damage
+        state.damage_dealt_teams['blue'] += damage
     if champion.team == 'red':
-        damage_dealt_teams['red'] += damage
+        state.damage_dealt_teams['red'] += damage
 
     # cultists galio spawning
     teams = [['blue', 'red'], ['red', 'blue']]
     for t in teams:
-        if (not galio_spawned[t[0]] and origin_class.amounts['cultist'][t[0]]
+        if (not state.galio_spawned[t[0]] and origin_class.amounts['cultist'][t[0]]
                 >= origin_class_stats.tiers['cultist'][0]):
-            if damage_dealt_teams[t[1]] > origin_class.total_health_teams[t[0]] * config.GALIO_TEAM_HEALTH_PERCENTAGE:
-                galio_spawned[t[0]] = True
+            if state.damage_dealt_teams[t[1]] > origin_class.total_health_teams[t[0]] * config.GALIO_TEAM_HEALTH_PERCENTAGE:
+                state.galio_spawned[t[0]] = True
                 origin_class.cultist(target, t[0])
 
-    for d in damage_dealt:
+    for d in state.damage_dealt:
         if d['champion'] == champion:
             d['damage'] += damage
             added = True
             break
     if not added:
-        damage_dealt.append({'champion': champion, 'damage': damage})
+        state.damage_dealt.append({'champion': champion, 'damage': damage})
 
 
 def reset_stat(champion, stat):

@@ -2,6 +2,7 @@ from . import config as config
 from . import origin_class as origin_class
 from . import origin_class_stats as origin_class_stats
 from . import champion_functions as champion_functions
+from .combat_state import get_state, reset as combat_reset
 import time
 import random
 import itertools
@@ -12,13 +13,9 @@ from .stats import AD, HEALTH, ARMOR, MR, AS, RANGE, MANA, MAXMANA, COST, MANALO
 from .champion_functions import attack, die, MILLIS, MILLISECONDS_INCREASE, add_damage_dealt
 from . import ability, active, field, item_stats, items
 
-que = []
-log = []
-
-
 def printt(msg):
     if config.PRINTMESSAGES:
-        log.append(msg)
+        get_state().log.append(msg)
 
 
 test_multiple = {'blue': 0, 'red': 0, 'bugged out': 0, 'draw': 0}
@@ -269,7 +266,8 @@ class champion:
                 trait_string = ' {}'.format(trait_damage)
 
             # if the target has died to luden's, don't continue
-            if target in eval(enemy_team):
+            team_list = get_state().red if self.team == 'blue' else get_state().blue
+        if target in team_list:
 
                 if self.lifesteal_spells > 0 and not item_damage:
                     self.add_que('heal', -1, None, None, damage * self.lifesteal_spells)
@@ -363,23 +361,16 @@ class champion:
         return shield
 
     def enemy_team(self):
-        enemy_team = 'red' if self.team == 'blue' else 'blue'
-        try:
-            if enemy_team:
-                result = eval(enemy_team)
-                return result if result is not None else []
-            return []
-        except (TypeError, NameError):
-            return []
+        state = get_state()
+        if self.team == 'blue':
+            return state.red
+        return state.blue
 
     def own_team(self):
-        try:
-            if self.team:
-                result = eval(self.team)
-                return result if result is not None else []
-            return []
-        except (TypeError, NameError):
-            return []
+        state = get_state()
+        if self.team == 'blue':
+            return state.blue
+        return state.red
 
     def ability(self):
         attackable_enemies = list(filter(lambda x: (x.champion and x.health > 0), self.enemy_team()))
@@ -403,17 +394,18 @@ class champion:
     def add_que(self, action, length, function=None, stat=None, value=None, data=None):
         if data is None:
             data = {}
+        state = get_state()
         if 'underlord' in data.keys():
-            que.append([action, data['underlord'], MILLIS() + length, function, stat, value, data])
+            state.que.append([action, data['underlord'], MILLIS() + length, function, stat, value, data])
         else:
             if action == 'change_stat' and length < 1:
                 change_stat(self, action, length, function, stat, value, data)
             elif action == 'shield' and length < 1:
                 shield(self, action, length, function, stat, value, data)
             else:
-                que.append([action, self, MILLIS() + length, function, stat, value, data])
+                state.que.append([action, self, MILLIS() + length, function, stat, value, data])
 
-        que.sort(key=lambda x: x[2])
+        state.que.sort(key=lambda x: x[2])
 
     def burn(self, target):
         target.clear_que_burn_removal()
@@ -429,57 +421,64 @@ class champion:
 
     def clear_que_idle(self):
         # not very beautiful is it? not trying to impress anyone tho
+        q = get_state().que
         for i in range(0, 15):
-            for q in que:
-                if q[1] is self and q[0] == 'clear_idle':
-                    que.remove(q)
+            for entry in q:
+                if entry[1] is self and entry[0] == 'clear_idle':
+                    q.remove(entry)
 
     def clear_que_healing_reduction(self):
-        for q in que:
-            if q[1] is self and q[0] == 'change_stat' and q[4] == 'healing_strength' and q[5] == 1:
-                que.remove(q)
+        q = get_state().que
+        for entry in q:
+            if entry[1] is self and entry[0] == 'change_stat' and entry[4] == 'healing_strength' and entry[5] == 1:
+                q.remove(entry)
 
     def clear_que_stunned_removal(self):
-        for q in que:
-            if q[1] is self and q[0] == 'change_stat' and q[4] == 'stunned' and not q[5]:
-                que.remove(q)
+        q = get_state().que
+        for entry in q:
+            if entry[1] is self and entry[0] == 'change_stat' and entry[4] == 'stunned' and not entry[5]:
+                q.remove(entry)
 
     def clear_que_blinded_removal(self):
-        for q in que:
-            if q[1] is self and q[0] == 'change_stat' and q[4] == 'blinded' and not q[5]:
-                que.remove(q)
+        q = get_state().que
+        for entry in q:
+            if entry[1] is self and entry[0] == 'change_stat' and entry[4] == 'blinded' and not entry[5]:
+                q.remove(entry)
 
     def clear_que_armor_removal(self):
-        for q in que:
-            if q[1] is self and q[0] == 'change_stat' and q[4] == 'armor':
-                que.remove(q)
+        q = get_state().que
+        for entry in q:
+            if entry[1] is self and entry[0] == 'change_stat' and entry[4] == 'armor':
+                q.remove(entry)
 
     def clear_que_burn_removal(self):
+        q = get_state().que
         for i in range(0, 15):
-            for q in que:
-                if q[0] == 'burn' and q[5] == self:
-                    que.remove(q)
+            for entry in q:
+                if entry[0] == 'burn' and entry[5] == self:
+                    q.remove(entry)
 
     def clear_que_dazzler(self):
+        q = get_state().que
         for i in range(0, 15):
-            for q in que:
-                if q[1] == self and q[0] == 'change_stat' and 'dazzler' in q[6]:
-                    que.remove(q)
+            for entry in q:
+                if entry[1] == self and entry[0] == 'change_stat' and 'dazzler' in entry[6]:
+                    q.remove(entry)
 
     def red_append(self, champion):
-        red.append(champion)
+        get_state().red.append(champion)
 
     def blue_append(self, champion):
-        blue.append(champion)
+        get_state().blue.append(champion)
 
     def red_return(self):
-        return red
+        return get_state().red
 
     def blue_return(self):
-        return blue
+        return get_state().blue
 
     def que_return(self):
-        return que
+        return get_state().que
 
     def spawn(self, name, stars, y, x, team=None, is_champion=True):
         if not team:
@@ -494,12 +493,15 @@ class champion:
                     items.append(i)
         unit = champion(name, stars=stars, team=team, y=y, x=x, itemlist=items, overlord=overlord)
         unit.champion = is_champion
-        eval(team).append(unit)
+        state = get_state()
+        if team == 'blue':
+            state.blue.append(unit)
+        else:
+            state.red.append(unit)
         return unit
 
     def que_replace(self, q):
-        global que
-        que = q
+        get_state().que = q
 
     def millis(self):
         return MILLIS()
@@ -522,72 +524,66 @@ class champion:
         self.max_health += 200
 
 
-global blue
-global red
-
-blue = []
-red = []
-
-
 # I think I am going to redo parts of this function. 
 # Essentially, I am just going to change the first 10 lines so it reads in the data from the two teams.
 # This will be an area I will look to optimize on later if need be but for now,
 # I want to keep things as simple as possible.
 def run(champion_q, player_1, player_2, round_damage=0):
+    state = get_state()
     reset_global_variables()
 
     for x in range(0, 7):
         for y in range(0, 4):
             if player_1.board[x][y]:
-                blue.append(champion_q(player_1.board[x][y].name, 'blue', y, x, player_1.board[x][y].stars,
+                state.blue.append(champion_q(player_1.board[x][y].name, 'blue', y, x, player_1.board[x][y].stars,
                                        player_1.board[x][y].items, False, None, player_1.board[x][y].chosen
                                        , player_1.board[x][y].kayn_form, player_1.board[x][y].target_dummy))
             if player_2.board[x][y]:
                 # Inverting because the combat system uses the whole board and does not mirror at start.
-                red.append(champion_q(player_2.board[x][y].name, 'red', 7 - y, 6 - x, player_2.board[x][y].stars,
+                state.red.append(champion_q(player_2.board[x][y].name, 'red', 7 - y, 6 - x, player_2.board[x][y].stars,
                                       player_2.board[x][y].items, False, None, player_2.board[x][y].chosen,
                                       player_2.board[x][y].kayn_form, player_2.board[x][y].target_dummy))
 
     printt('Player 1 (Blue) Team')
-    for unit in blue:
+    for unit in state.blue:
         printt(unit.name)
 
     printt('Player 2 (Red) Team')
-    for unit in red:
+    for unit in state.red:
         printt(unit.name)
 
-    if len(blue) == 0 or len(red) == 0:
-        if len(red) == 0 and len(blue) == 0:
+    if len(state.blue) == 0 or len(state.red) == 0:
+        if len(state.red) == 0 and len(state.blue) == 0:
             printt('DRAW')
             return 0, round_damage
-        elif len(red) == 0:
+        elif len(state.red) == 0:
             printt('BLUE TEAM WON')
-            survive_combat(player_1, blue)
-            return 1, round_damage + DAMAGE_PER_UNIT[len(blue)]
-        elif len(blue) == 0:
+            survive_combat(player_1, state.blue)
+            return 1, round_damage + DAMAGE_PER_UNIT[len(state.blue)]
+        elif len(state.blue) == 0:
             printt('RED TEAM WON')
-            survive_combat(player_2, red)
-            return 2, round_damage + DAMAGE_PER_UNIT[len(red)]
+            survive_combat(player_2, state.red)
+            return 2, round_damage + DAMAGE_PER_UNIT[len(state.red)]
 
     # Not quite sure what is happening in these lines. 
     # They are effects that happen at the start of the fight.
     # But blue[0] feels odd
-    items.chalice_of_power(blue[0])  # chalice_of_power
-    items.zekes_herald(blue[0])  # zekes_herald
-    items.frozen_heart(blue[0])  # frozen_heart
-    items.ionic_spark(blue[0])  # ionic_spark
-    items.hand_of_justice(blue[0])  # hand_of_justice
-    items.locket_of_the_iron_solari(blue[0])  # locket_of_the_iron_solari
-    items.shroud_of_stillness(blue[0])  # shroud_of_stillness
-    items.zzrot_portal(blue[0])  # zzrot_portal
-    items.zephyr(blue[0])  # zephyr
+    items.chalice_of_power(state.blue[0])  # chalice_of_power
+    items.zekes_herald(state.blue[0])  # zekes_herald
+    items.frozen_heart(state.blue[0])  # frozen_heart
+    items.ionic_spark(state.blue[0])  # ionic_spark
+    items.hand_of_justice(state.blue[0])  # hand_of_justice
+    items.locket_of_the_iron_solari(state.blue[0])  # locket_of_the_iron_solari
+    items.shroud_of_stillness(state.blue[0])  # shroud_of_stillness
+    items.zzrot_portal(state.blue[0])  # zzrot_portal
+    items.zephyr(state.blue[0])  # zephyr
 
-    origin_class.total_health(blue, red)
-    origin_class.total_origin_class(blue[0], red[0])  # count and execute some traits
+    origin_class.total_health(state.blue, state.red)
+    origin_class.total_origin_class(state.blue[0], state.red[0])  # count and execute some traits
     # Not sure what changed the length of one of these arrays at this point but this seems to fix the issue
-    if len(blue) == 0 or len(red) == 0:
+    if len(state.blue) == 0 or len(state.red) == 0:
         return 0, round_damage
-    items.infinity_edge(blue[0])
+    items.infinity_edge(state.blue[0])
     # There appears to be some issue with infinity edge
     # infinity_edge made sure that the crit damage bonus gets registered after everything else has gone through
 
@@ -596,91 +592,91 @@ def run(champion_q, player_1, player_2, round_damage=0):
             test_multiple['bugged out'] += 1
             break
         if MILLIS() > 0 and MILLIS() % origin_class_stats.length['elderwood'] == 0:
-            origin_class.elderwood(blue, red)  # elderwood -trait
+            origin_class.elderwood(state.blue, state.red)  # elderwood -trait
         if MILLIS() > 0 and MILLIS() % \
                 origin_class_stats.threshold['hunter'][origin_class.get_origin_class_tier('blue', 'hunter')] == 0:
-            origin_class.hunter(blue)  # hunter -trait
+            origin_class.hunter(state.blue)  # hunter -trait
         if MILLIS() > 0 and MILLIS() % \
                 origin_class_stats.threshold['hunter'][origin_class.get_origin_class_tier('red', 'hunter')] == 0:
-            origin_class.hunter(red)  # hunter -trait
+            origin_class.hunter(state.red)  # hunter -trait
 
-        for b, o in itertools.zip_longest(blue, red):            
+        for b, o in itertools.zip_longest(state.blue, state.red):            
             if b and not b.target_dummy:
                 field.action(b)
             if o and not o.target_dummy:
                 field.action(o)
 
-        while len(que) > 0 and MILLIS() > que[0][2]:
-            champion_q = que[0][1]
-            data = que[0][6]
+        while len(state.que) > 0 and MILLIS() > state.que[0][2]:
+            champion_q_target = state.que[0][1]
+            data = state.que[0][6]
             # make sure that teemo's poison darts deal damage even after teemo himself has died
             # morgana deals if the ult is running and she dies
             # if ahri dies, she will still ult. range reduced in the executed function
-            if (champion_q in blue or champion_q in red) or \
-                    (champion_q.name == 'teemo' and champion_q.health <= 0 and que[0][3] and 'target' in que[0][3][1]) \
-                    or (champion_q.name == 'morgana' and champion_q.health <= 0 and que[0][3] and
-                        'coordinates' in que[0][3][1]) or \
-                    (champion_q.name == 'ahri' and champion_q.health <= 0 and que[0][3] and 'y' in que[0][3][1]):
+            if (champion_q_target in state.blue or champion_q_target in state.red) or \
+                    (champion_q_target.name == 'teemo' and champion_q_target.health <= 0 and state.que[0][3] and 'target' in state.que[0][3][1]) \
+                    or (champion_q_target.name == 'morgana' and champion_q_target.health <= 0 and state.que[0][3] and
+                        'coordinates' in state.que[0][3][1]) or \
+                    (champion_q_target.name == 'ahri' and champion_q_target.health <= 0 and state.que[0][3] and 'y' in state.que[0][3][1]):
 
-                if que[0][0] == 'clear_idle':
-                    champion_q.idle = True
-                    champion_q.print(' cleared idle     ')
+                if state.que[0][0] == 'clear_idle':
+                    champion_q_target.idle = True
+                    champion_q_target.print(' cleared idle     ')
 
-                if que[0][0] == 'change_stat':
-                    change_stat(champion_q, que[0][0], 0, que[0][3], que[0][4], que[0][5], data)
+                if state.que[0][0] == 'change_stat':
+                    change_stat(champion_q_target, state.que[0][0], 0, state.que[0][3], state.que[0][4], state.que[0][5], data)
 
-                if que[0][0] == 'heal':
-                    start_value = round(champion_q.health, 2)
-                    champion_q.health += (que[0][5] * champion_q.healing_strength)
-                    if champion_q.health > champion_q.max_health:
-                        champion_q.health = champion_q.max_health
-                    champion_q.print(' {} {} --> {}'.format('health', start_value, round(champion_q.health, 2)))
+                if state.que[0][0] == 'heal':
+                    start_value = round(champion_q_target.health, 2)
+                    champion_q_target.health += (state.que[0][5] * champion_q_target.healing_strength)
+                    if champion_q_target.health > champion_q_target.max_health:
+                        champion_q_target.health = champion_q_target.max_health
+                    champion_q_target.print(' {} {} --> {}'.format('health', start_value, round(champion_q_target.health, 2)))
 
-                if que[0][0] == 'shield':
-                    shield(champion_q, que[0][0], 0, que[0][3], que[0][4], que[0][5], data)
+                if state.que[0][0] == 'shield':
+                    shield(champion_q_target, state.que[0][0], 0, state.que[0][3], state.que[0][4], state.que[0][5], data)
 
-                if que[0][0] == 'change_target':
-                    old_target = champion_q.target
-                    new_target = que[0][5]
+                if state.que[0][0] == 'change_target':
+                    old_target = champion_q_target.target
+                    new_target = state.que[0][5]
                     if new_target and new_target.health > 0:
-                        champion_q.target = new_target
-                        champion_q.target_y = new_target.y
-                        champion_q.target_x = new_target.x
-                        if champion_q.target != old_target:
-                            champion_q.print(' has a new target: ' + '{:<8}'.format(champion_q.target.team) +
-                                             '{:<8}'.format(champion_q.target.name) +
-                                             '  [{}, {}]'.format(champion_q.target.y, champion_q.target.x))
+                        champion_q_target.target = new_target
+                        champion_q_target.target_y = new_target.y
+                        champion_q_target.target_x = new_target.x
+                        if champion_q_target.target != old_target:
+                            champion_q_target.print(' has a new target: ' + '{:<8}'.format(champion_q_target.target.team) +
+                                             '{:<8}'.format(champion_q_target.target.name) +
+                                             '  [{}, {}]'.format(champion_q_target.target.y, champion_q_target.target.x))
                     else:
-                        field.find_target(champion_q)
+                        field.find_target(champion_q_target)
 
-                if que[0][0] == 'execute_function':
-                    if len(que[0][3]) > 1:
-                        (que[0][3][0])(champion_q, que[0][3][1])
+                if state.que[0][0] == 'execute_function':
+                    if len(state.que[0][3]) > 1:
+                        (state.que[0][3][0])(champion_q_target, state.que[0][3][1])
 
-                if que[0][0] == 'burn':
-                    champion_q.spell(que[0][5], 0, que[0][5].max_health * config.BURN_DMG_PER_SLICE, True, True)
+                if state.que[0][0] == 'burn':
+                    champion_q_target.spell(state.que[0][5], 0, state.que[0][5].max_health * config.BURN_DMG_PER_SLICE, True, True)
 
-                if que[0][0] == 'kill':
-                    que[0][5].die()
+                if state.que[0][0] == 'kill':
+                    state.que[0][5].die()
 
-            que.pop(0)
+            state.que.pop(0)
 
         MILLISECONDS_INCREASE()
-        if len(blue) == 0 or len(red) == 0:
-            if len(red) == 0:
+        if len(state.blue) == 0 or len(state.red) == 0:
+            if len(state.red) == 0:
                 printt('BLUE TEAM WON')
-                for unit in blue:
+                for unit in state.blue:
                     printt(unit.name)
-                printt("player_1 dealt round damage = {}".format(round_damage + DAMAGE_PER_UNIT[len(blue)]))
-                survive_combat(player_1, blue)
-                return 1, (round_damage + DAMAGE_PER_UNIT[len(blue)])
-            elif len(blue) == 0:
+                printt("player_1 dealt round damage = {}".format(round_damage + DAMAGE_PER_UNIT[len(state.blue)]))
+                survive_combat(player_1, state.blue)
+                return 1, (round_damage + DAMAGE_PER_UNIT[len(state.blue)])
+            elif len(state.blue) == 0:
                 printt('RED TEAM WON')
-                for unit in red:
+                for unit in state.red:
                     printt(unit.name)
-                printt("player_2 dealt round damage = {}".format(round_damage + DAMAGE_PER_UNIT[len(red)]))
-                survive_combat(player_2, red)
-                return 2, (round_damage + DAMAGE_PER_UNIT[len(red)])
+                printt("player_2 dealt round damage = {}".format(round_damage + DAMAGE_PER_UNIT[len(state.red)]))
+                survive_combat(player_2, state.red)
+                return 2, (round_damage + DAMAGE_PER_UNIT[len(state.red)])
             break
         if MILLIS() > 150000:
             # print("Round has gone on too long")
@@ -769,19 +765,7 @@ def change_stat(a_champion, action, length, function, stat, value, data):
 
 
 def reset_global_variables():
-    global blue
-    global red
-    global que
-    global log
-    blue = []
-    red = []
-    que = []
-    log = []
-
-    champion_functions.MILLISECONDS = 0
-    champion_functions.damage_dealt = []
-    champion_functions.damage_dealt_teams = {'blue': 0, 'red': 0}
-    champion_functions.galio_spawned = {'blue': False, 'red': False}
+    combat_reset()
 
     # global kennen_hits
     # global l

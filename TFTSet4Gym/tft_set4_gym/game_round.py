@@ -5,6 +5,7 @@ import numpy as np
 from . import champion, pool_stats, minion
 from .item_stats import item_builds as full_items, starting_items
 from .champion_functions import MILLIS
+from .combat_state import get_state
 
 
 class Game_Round:
@@ -410,16 +411,17 @@ def log_end_turn(game_round, path):
 # This one is for the champion and logging the battles.
 def log_to_file_combat():
     if config.LOGMESSAGES and config.LOG_COMBAT:
+        state = get_state()
         with open('log.txt', "a") as out:
-            if len(champion.log) > 0:
+            if len(state.log) > 0:
                 if MILLIS() < 75000:
-                    if champion.log[-1] == 'BLUE TEAM WON':
+                    if state.log[-1] == 'BLUE TEAM WON':
                         champion.test_multiple['blue'] += 1
-                    if champion.log[-1] == 'RED TEAM WON':
+                    if state.log[-1] == 'RED TEAM WON':
                         champion.test_multiple['red'] += 1
                 elif MILLIS() < 200000:
                     champion.test_multiple['draw'] += 1
-                for line in champion.log:
+                for line in state.log:
                     out.write(str(line))
                     out.write('\n')
-    champion.log = []
+    get_state().log = []
