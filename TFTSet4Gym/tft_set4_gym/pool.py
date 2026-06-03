@@ -96,14 +96,42 @@ class pool:
 				percents = level_percentage[player.level]
 			else:
 				percents = chosen_stats[player.level]
-			ranInt[i] = random.random()
-			if index == -1:
-				index = 0
-				while ranInt[i] > percents[index]:
-					index += 1
-					if index > 4:
-						print("ERROR with ranInt[i] = " + str(ranInt[i]) + " and player level" + str(player.level))
-						break
+			valid_pick = False
+			attempts = 0
+			
+			while not valid_pick and attempts < 100:
+				ranInt[i] = random.random()
+				
+				if idx == -1:
+					index = 0
+					while ranInt[i] > percents[index]:
+						index += 1
+						if index > 4:
+							print("ERROR with ranInt[i] = " + str(ranInt[i]) + " and player level" + str(player.level))
+							break
+				else:
+					index = idx
+					
+				if index == 0 and self.num_cost_1 > 0:
+					valid_pick = True
+				elif index == 1 and self.num_cost_2 > 0:
+					valid_pick = True
+				elif index == 2 and self.num_cost_3 > 0:
+					valid_pick = True
+				elif index == 3 and self.num_cost_4 > 0:
+					valid_pick = True
+				elif index == 4 and self.num_cost_5 > 0:
+					valid_pick = True
+					
+				if idx != -1 and not valid_pick:
+					break
+					
+				attempts += 1
+				
+			if not valid_pick:
+				championOptions[i] = " "
+				continue
+
 			counter = 0
 			counterIndex = 0
 
@@ -176,8 +204,9 @@ class pool:
 				championOptions[i] = keys_list[counterIndex - 1]
 			# This adds the chosen aspect to the champion.
 			if chosen_index == i:
-				chosen_type = self.pick_chosen(championOptions[i])
-				championOptions[i] = str(championOptions[i]) + "_" + chosen_type + "_c"
+				if championOptions[i] != " ":
+					chosen_type = self.pick_chosen(championOptions[i])
+					championOptions[i] = str(championOptions[i]) + "_" + chosen_type + "_c"
 				# player.print("Offering chosen unit {} at index {}".format(championOptions[i], index))
 			index = idx
 		return championOptions
