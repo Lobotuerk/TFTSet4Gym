@@ -612,7 +612,8 @@ def titans_resolve_helper(unit):
 # see item notes
 def trap_claw(champion, target):
 
-    target.items.remove('trap_claw')
+    if 'trap_claw' in target.items:
+        target.items.remove('trap_claw')
 
     change_stat(champion, 'stunned', True)
     champion.add_que('change_stat', item_stats.item_stun_duration['trap_claw'], None, 'stunned', False)
