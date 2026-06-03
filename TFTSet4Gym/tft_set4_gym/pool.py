@@ -109,75 +109,92 @@ class pool:
 
 			# cost 1
 			if index == 0:
-				# Get a list of all the champions in the pool
-				cost_1 = list(COST_1.values())
-				# Pick a random number to look for the position of that champion
-				ranPoolInt = random.randint(0, self.num_cost_1 - 1)
-				# Until the counter is greater than the number of champions checked
-				while counter < ranPoolInt:
-					# Increment counter to the next champion
-					counter += cost_1[counterIndex]
-					# Increment the champion index
-					counterIndex += 1
-					# If we sample the last champion in the list
-					if counterIndex == len(cost_1):
-						break
-				# Get a list of the champion names
-				keys_list = list(COST_1)
-				# Set the option to be the champion name of choice
-				championOptions[i] = keys_list[counterIndex - 1]
+				if self.num_cost_1 <= 0:
+					championOptions[i] = " "
+				else:
+					# Get a list of all the champions in the pool
+					cost_1 = list(COST_1.values())
+					# Pick a random number to look for the position of that champion
+					ranPoolInt = random.randint(0, self.num_cost_1 - 1)
+					# Until the counter is greater than the number of champions checked
+					while counter < ranPoolInt:
+						# Increment counter to the next champion
+						counter += cost_1[counterIndex]
+						# Increment the champion index
+						counterIndex += 1
+						# If we sample the last champion in the list
+						if counterIndex == len(cost_1):
+							break
+					# Get a list of the champion names
+					keys_list = list(COST_1)
+					# Set the option to be the champion name of choice
+					championOptions[i] = keys_list[counterIndex - 1]
 
 			# cost 2
 			elif index == 1:
-				cost_2 = list(COST_2.values())
-				ranPoolInt = random.randint(0, self.num_cost_2 - 1)
-				while counter < ranPoolInt:
-					counter += cost_2[counterIndex]
-					counterIndex += 1
-					if counterIndex == len(cost_2):
-						break
-				keys_list = list(COST_2)
-				championOptions[i] = keys_list[counterIndex - 1]
+				if self.num_cost_2 <= 0:
+					championOptions[i] = " "
+				else:
+					cost_2 = list(COST_2.values())
+					ranPoolInt = random.randint(0, self.num_cost_2 - 1)
+					while counter < ranPoolInt:
+						counter += cost_2[counterIndex]
+						counterIndex += 1
+						if counterIndex == len(cost_2):
+							break
+					keys_list = list(COST_2)
+					championOptions[i] = keys_list[counterIndex - 1]
 
 			# cost 3
 			elif index == 2:
-				cost_3 = list(COST_3.values())
-				ranPoolInt = random.randint(0, self.num_cost_3 - 1)
-				while counter < ranPoolInt:
-					counter += cost_3[counterIndex]
-					counterIndex += 1
-					if counterIndex == len(cost_3):
-						break
-				keys_list = list(COST_3)
-				championOptions[i] = keys_list[counterIndex - 1]
+				if self.num_cost_3 <= 0:
+					championOptions[i] = " "
+				else:
+					cost_3 = list(COST_3.values())
+					ranPoolInt = random.randint(0, self.num_cost_3 - 1)
+					while counter < ranPoolInt:
+						counter += cost_3[counterIndex]
+						counterIndex += 1
+						if counterIndex == len(cost_3):
+							break
+					keys_list = list(COST_3)
+					championOptions[i] = keys_list[counterIndex - 1]
 
 			# cost 4
 			elif index == 3:
-				cost_4 = list(COST_4.values())
-				ranPoolInt = random.randint(0, self.num_cost_4 - 1)
-				while counter < ranPoolInt:
-					counter += cost_4[counterIndex]
-					counterIndex += 1
-					if counterIndex == len(cost_4):
-						break
-				keys_list = list(COST_4)
-				championOptions[i] = keys_list[counterIndex - 1]
+				if self.num_cost_4 <= 0:
+					championOptions[i] = " "
+				else:
+					cost_4 = list(COST_4.values())
+					ranPoolInt = random.randint(0, self.num_cost_4 - 1)
+					while counter < ranPoolInt:
+						counter += cost_4[counterIndex]
+						counterIndex += 1
+						if counterIndex == len(cost_4):
+							break
+					keys_list = list(COST_4)
+					championOptions[i] = keys_list[counterIndex - 1]
 
 			# cost 5
 			else:
-				cost_5 = list(COST_5.values())
-				ranPoolInt = random.randint(0, self.num_cost_5 - 1)
-				while counter < ranPoolInt:
-					if counterIndex == len(cost_5):
-						break
-					counter += cost_5[counterIndex]
-					counterIndex += 1
-				keys_list = list(COST_5)
-				championOptions[i] = keys_list[counterIndex - 1]
+				if self.num_cost_5 <= 0:
+					championOptions[i] = " "
+				else:
+					cost_5 = list(COST_5.values())
+					ranPoolInt = random.randint(0, self.num_cost_5 - 1)
+					while counter < ranPoolInt:
+						if counterIndex == len(cost_5):
+							break
+						counter += cost_5[counterIndex]
+						counterIndex += 1
+					keys_list = list(COST_5)
+					championOptions[i] = keys_list[counterIndex - 1]
+
 			# This adds the chosen aspect to the champion.
 			if chosen_index == i:
-				chosen_type = self.pick_chosen(championOptions[i])
-				championOptions[i] = str(championOptions[i]) + "_" + chosen_type + "_c"
+				if championOptions[i] != " ":
+					chosen_type = self.pick_chosen(championOptions[i])
+					championOptions[i] = str(championOptions[i]) + "_" + chosen_type + "_c"
 				# player.print("Offering chosen unit {} at index {}".format(championOptions[i], index))
 			index = idx
 		return championOptions
