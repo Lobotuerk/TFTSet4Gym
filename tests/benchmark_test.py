@@ -8,15 +8,20 @@ import time
 import sys
 import os
 import gc
+import json
+import datetime
 import psutil
 import numpy as np
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from statistics import mean, median, stdev
 
 # Add the package root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from TFTSet4Gym.tft_set4_gym.tft_simulator import parallel_env
+
+# Default path for benchmark results file
+BENCHMARK_RESULTS_PATH = os.path.join(os.path.dirname(__file__), 'benchmark_results.json')
 
 
 class EnvironmentBenchmark:
@@ -245,6 +250,56 @@ class EnvironmentBenchmark:
             'total_iterations': len(processing_times)
         }
     
+    def benchmark_full_episode(self) -> Dict[str, float]:
+        """Run a full game episode and capture timing metrics from RuntimeStats."""
+        print("🎮 Benchmarking full game episode...")
+
+        env = parallel_env()
+        observations, infos = env.reset()
+
+        episode_start = time.perf_counter()
+        step_count = 0
+
+        while env.agents:
+            actions = {}
+            for agent in env.agents:
+                actions[agent] = env.action_space(agent).sample()
+
+            observations, rewards, terminations, truncations, infos = env.step(actions)
+            step_count += 1
+
+            if all(terminations.values()) or all(truncations.values()):
+                break
+
+        episode_time = time.perf_counter() - episode_start
+
+        # Collect runtime stats from the last surviving agent
+        stats = None
+        for agent, info in infos.items():
+            if "runtime_stats" in info:
+                stats = info["runtime_stats"]
+                break
+
+        env.close()
+
+        result = {
+            "episode_time_s": episode_time,
+            "steps": step_count,
+        }
+
+        if stats:
+            result.update({
+                "turns": stats["num_turns"],
+                "combats": stats["num_combats"],
+                "turn_time_avg_ms": stats["turn_time_avg_s"] * 1000,
+                "turn_time_total_s": stats["turn_time_total_s"],
+                "combat_time_avg_ms": stats["combat_time_avg_s"] * 1000,
+                "combat_time_total_s": stats["combat_time_total_s"],
+                "step_time_avg_ms": stats["step_time_avg_s"] * 1000,
+            })
+
+        return result
+
     def run_full_benchmark(self) -> Dict[str, Dict[str, float]]:
         """Run all benchmarks and return comprehensive results."""
         print("🚀 Starting TFT Set 4 Gym Environment Benchmark Suite")
@@ -252,24 +307,29 @@ class EnvironmentBenchmark:
         print("=" * 60)
         
         start_time = time.time()
-        
+
         # Run all benchmarks
         self.results['environment_creation'] = self.benchmark_environment_creation()
         self.results['environment_reset'] = self.benchmark_environment_reset()
         self.results['environment_step'] = self.benchmark_environment_step()
         self.results['memory_usage'] = self.benchmark_memory_usage()
         self.results['observation_processing'] = self.benchmark_observation_processing()
-        
+        self.results['full_episode'] = self.benchmark_full_episode()
+
         total_time = time.time() - start_time
         self.results['benchmark_meta'] = {
             'total_benchmark_time': total_time,
             'num_iterations': self.num_iterations,
-            'num_steps_per_episode': self.num_steps_per_episode
+            'num_steps_per_episode': self.num_steps_per_episode,
+            'timestamp': datetime.datetime.now().isoformat()
         }
-        
+
         print("=" * 60)
         print(f"✅ Benchmark completed in {total_time:.2f} seconds")
-        
+
+        # Export results to JSON
+        self._export_results()
+
         return self.results
     
     def print_results(self):
@@ -327,6 +387,21 @@ class EnvironmentBenchmark:
         print(f"   Std Dev: {obs['std']*1000000:.1f}μs")
         print(f"   Range: {obs['min']*1000000:.1f}μs - {obs['max']*1000000:.1f}μs")
         
+        # Full Episode
+        if 'full_episode' in self.results:
+            ep = self.results['full_episode']
+            print(f"\n🎮 FULL EPISODE")
+            print(f"   Episode time: {ep['episode_time_s']:.2f}s")
+            print(f"   Steps: {ep['steps']}")
+            if 'turns' in ep:
+                print(f"   Turns: {ep['turns']}")
+                print(f"   Turn time (avg): {ep['turn_time_avg_ms']:.2f}ms")
+            if 'combats' in ep:
+                print(f"   Combats: {ep['combats']}")
+                print(f"   Combat time (avg): {ep['combat_time_avg_ms']:.2f}ms")
+            if 'step_time_avg_ms' in ep:
+                print(f"   Step time (avg): {ep['step_time_avg_ms']:.2f}ms")
+
         # Performance Summary
         print(f"\n⚡ PERFORMANCE SUMMARY")
         print(f"   Environment creation rate: {1/creation['mean']:.1f} envs/second")
@@ -338,8 +413,101 @@ class EnvironmentBenchmark:
         print(f"\n📊 BENCHMARK INFO")
         print(f"   Total benchmark time: {meta['total_benchmark_time']:.1f}s")
         print(f"   Configuration: {meta['num_iterations']} iterations, {meta['num_steps_per_episode']} steps/episode")
-        
+
         print("=" * 80)
+
+    def _export_results(self, path: Optional[str] = None):
+        """Export benchmark results to a JSON file."""
+        if path is None:
+            path = BENCHMARK_RESULTS_PATH
+        with open(path, 'w') as f:
+            json.dump(self.results, f, indent=2)
+        print(f"\n📁 Results exported to {path}")
+
+    @staticmethod
+    def load_results(path: str) -> Dict:
+        """Load benchmark results from a JSON file."""
+        with open(path, 'r') as f:
+            return json.load(f)
+
+    @staticmethod
+    def compare_results(new: Dict, baseline: Dict) -> Dict:
+        """Compare two benchmark result dicts and return deltas."""
+        deltas = {}
+        sections = [k for k in new if k != 'benchmark_meta']
+        for section in sections:
+            if section not in baseline:
+                continue
+            deltas[section] = {}
+            for key in new[section]:
+                if key not in baseline[section]:
+                    continue
+                old_val = baseline[section][key]
+                new_val = new[section][key]
+                if isinstance(old_val, (int, float)) and isinstance(new_val, (int, float)) and old_val != 0:
+                    delta = new_val - old_val
+                    delta_pct = (delta / abs(old_val)) * 100
+                    deltas[section][key] = {
+                        'baseline': old_val,
+                        'current': new_val,
+                        'delta': delta,
+                        'delta_pct': delta_pct
+                    }
+                elif isinstance(old_val, (int, float)) and isinstance(new_val, (int, float)):
+                    deltas[section][key] = {
+                        'baseline': old_val,
+                        'current': new_val,
+                        'delta': new_val - old_val,
+                        'delta_pct': 0.0
+                    }
+        return deltas
+
+    @staticmethod
+    def print_comparison(deltas: Dict):
+        """Print formatted comparison results."""
+        if not deltas:
+            print("No comparable sections found between runs.")
+            return
+
+        print("\n" + "=" * 90)
+        print("📊 BENCHMARK COMPARISON — REGRESSIONS / IMPROVEMENTS")
+        print("=" * 90)
+        has_regression = False
+        has_improvement = False
+
+        for section, metrics in deltas.items():
+            print(f"\n  [{section.replace('_', ' ').title()}]")
+            for key, data in metrics.items():
+                delta = data['delta']
+                delta_pct = data['delta_pct']
+                direction = "🔴 WORSE" if delta > 0 else "🟢 BETTER"
+                if delta > 0:
+                    has_regression = True
+                else:
+                    has_improvement = True
+                print(f"    {key:30s}  {data['baseline']:>12.4f}  →  {data['current']:<12.4f}  "
+                      f"({delta:+.4f}, {delta_pct:+.2f}%)  {direction}")
+
+        print("=" * 90)
+        if has_regression:
+            print("⚠️  Some metrics show regressions.")
+        if has_improvement:
+            print("✅  Some metrics show improvements.")
+        if not has_regression and not has_improvement:
+            print("✅  No significant changes detected.")
+
+    @staticmethod
+    def get_scoring_keys() -> Dict[str, str]:
+        """Return the metric keys that indicate 'lower is better' (performance metrics)."""
+        return {
+            'environment_creation': ['mean', 'median', 'std', 'min', 'max'],
+            'environment_reset': ['mean', 'median', 'std', 'min', 'max'],
+            'environment_step': ['mean', 'median', 'std', 'min', 'max'],
+            'observation_processing': ['mean', 'median', 'std', 'min', 'max'],
+            'memory_usage': ['after_creation_mb', 'after_reset_mb', 'during_steps_mean_mb',
+                             'during_steps_max_mb', 'creation_overhead_mb', 'reset_overhead_mb'],
+            'full_episode': ['episode_time_s', 'turn_time_avg_ms', 'combat_time_avg_ms', 'step_time_avg_ms']
+        }
 
 
 @pytest.mark.benchmark
@@ -381,11 +549,49 @@ if __name__ == "__main__":
         import subprocess
         subprocess.check_call([sys.executable, "-m", "pip", "install", "psutil"])
         import psutil
-    
-    # Run benchmark based on command line arguments
-    if len(sys.argv) > 1 and sys.argv[1] == "comprehensive":
-        run_comprehensive_benchmark()
+
+    # Parse arguments
+    compare_path = None
+    save_path = None
+    run_mode = "quick"
+
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        if args[i] == "--compare" and i + 1 < len(args):
+            compare_path = args[i + 1]
+            i += 2
+        elif args[i] == "--save-path" and i + 1 < len(args):
+            save_path = args[i + 1]
+            i += 2
+        elif args[i] == "comprehensive":
+            run_mode = "comprehensive"
+            i += 1
+        else:
+            i += 1
+
+    # If comparing, load baseline and skip running benchmarks
+    if compare_path:
+        if not os.path.exists(compare_path):
+            print(f"❌ Baseline file not found: {compare_path}")
+            sys.exit(1)
+        if not os.path.exists(save_path or BENCHMARK_RESULTS_PATH):
+            print(f"❌ New results not found. Run a benchmark first to generate results.")
+            sys.exit(1)
+
+        baseline = EnvironmentBenchmark.load_results(compare_path)
+        new_results = EnvironmentBenchmark.load_results(save_path or BENCHMARK_RESULTS_PATH)
+        deltas = EnvironmentBenchmark.compare_results(new_results, baseline)
+        EnvironmentBenchmark.print_comparison(deltas)
+        sys.exit(0)
+
+    # Run benchmark
+    if run_mode == "comprehensive":
+        benchmark = EnvironmentBenchmark(num_iterations=100, num_steps_per_episode=50)
     else:
-        run_quick_benchmark()
-    
+        benchmark = EnvironmentBenchmark(num_iterations=10, num_steps_per_episode=20)
+
+    benchmark.run_full_benchmark()
+    benchmark.print_results()
+
     print("\n🎉 Benchmark complete!")
