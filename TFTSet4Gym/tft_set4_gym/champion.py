@@ -196,6 +196,8 @@ class champion:
         if self == target:
             enemy_team = self.team  # when ionic sparking themselves
 
+        team_list = get_state().red if self.team == 'blue' else get_state().blue
+
         if not ('trap_claw' in target.items and not item_damage and not burn_damage):  # trap_claw
 
             if self.pumped_up:  # the_boss -trait
@@ -266,8 +268,6 @@ class champion:
             if trait_damage:
                 trait_string = ' {}'.format(trait_damage)
 
-            # if the target has died to luden's, don't continue
-            team_list = get_state().red if self.team == 'blue' else get_state().blue
         if target in team_list:
 
                 if self.lifesteal_spells > 0 and not item_damage:
