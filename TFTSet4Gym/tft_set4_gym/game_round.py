@@ -27,6 +27,7 @@ class Game_Round:
         self.current_round = 0
         self.matchups = []
         self.rank = rank
+        self._combat_times = []
 
         log_to_file_start(f'log_{self.rank}.txt')
 
@@ -108,8 +109,10 @@ class Game_Round:
                 config.WARLORD_WINS['red'] = players[match[1]].win_streak
 
                 # Main simulation call
+                _c_start = time.perf_counter()
                 index_won, damage = champion.run(champion.champion, players[match[0]], players[match[1]],
                                                  self.ROUND_DAMAGE[round_index][1])
+                self._combat_times.append(time.perf_counter() - _c_start)
 
                 # Draw
                 if index_won == 0:
@@ -143,8 +146,10 @@ class Game_Round:
                 players[match[0]].start_time = time.time_ns()
                 config.WARLORD_WINS['blue'] = players[match[0]].win_streak
                 config.WARLORD_WINS['red'] = players[match[2]].win_streak
+                _c_start = time.perf_counter()
                 index_won, damage = champion.run(champion.champion, players[match[0]], players[match[2]],
                                                  self.ROUND_DAMAGE[round_index][1])
+                self._combat_times.append(time.perf_counter() - _c_start)
                 if index_won == 2 or index_won == 0:
                     players[match[0]].health -= damage
                     players[match[0]].loss_round(damage)
@@ -372,6 +377,11 @@ class Game_Round:
 
     def update_players(self, players):
         self.PLAYERS = players
+
+    def collect_combat_times(self):
+        times = self._combat_times[:]
+        self._combat_times = []
+        return times
 
 
 def log_to_file_start(path):

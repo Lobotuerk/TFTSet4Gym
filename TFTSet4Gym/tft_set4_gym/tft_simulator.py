@@ -2,6 +2,7 @@ from . import config
 import functools
 import gymnasium as gym
 import numpy as np
+import time
 from gymnasium.spaces import MultiDiscrete, Box, Dict
 from . import pool
 from .player import Player as player_class
@@ -15,6 +16,57 @@ from pettingzoo.utils.env import ParallelEnv
 def parallel_env(rank=0):
     """Create a parallel environment."""
     return TFT_Simulator(env_config=None, rank=rank)
+
+
+class RuntimeStats:
+    """Lightweight accumulator for runtime performance metrics.
+
+    Records counts and total wall-clock durations so the caller can
+    compute averages when needed (e.g. at agent termination).
+    Uses time.perf_counter() for monotonic, low-overhead timing.
+    """
+    __slots__ = (
+        'step_count', 'step_total',
+        'turn_count', 'turn_total',
+        'combat_count', 'combat_total',
+        'game_start_time',
+    )
+
+    def __init__(self):
+        self.step_count = 0
+        self.step_total = 0.0
+        self.turn_count = 0
+        self.turn_total = 0.0
+        self.combat_count = 0
+        self.combat_total = 0.0
+        self.game_start_time = 0.0
+
+    def record_step(self, duration: float):
+        self.step_count += 1
+        self.step_total += duration
+
+    def record_turn(self, duration: float):
+        self.turn_count += 1
+        self.turn_total += duration
+
+    def record_combat(self, duration: float):
+        self.combat_count += 1
+        self.combat_total += duration
+
+    def to_dict(self) -> dict:
+        game_dur = time.perf_counter() - self.game_start_time if self.game_start_time else 0.0
+        return {
+            "game_duration_s": game_dur,
+            "num_steps": self.step_count,
+            "num_turns": self.turn_count,
+            "num_combats": self.combat_count,
+            "step_time_avg_s": self.step_total / self.step_count if self.step_count else 0.0,
+            "step_time_total_s": self.step_total,
+            "turn_time_avg_s": self.turn_total / self.turn_count if self.turn_count else 0.0,
+            "turn_time_total_s": self.turn_total,
+            "combat_time_avg_s": self.combat_total / self.combat_count if self.combat_count else 0.0,
+            "combat_time_total_s": self.combat_total,
+        }
 
 
 class TFT_Simulator(ParallelEnv):
@@ -35,6 +87,8 @@ class TFT_Simulator(ParallelEnv):
         self.step_function = Step_Function(self.pool_obj, self.game_observations)
         self.game_round = Game_Round(self.PLAYERS, self.pool_obj, self.step_function, rank)
         self.actions_taken = 0
+        self.runtime_stats = RuntimeStats()
+        self.runtime_stats.game_start_time = time.perf_counter()
         self.game_round.play_game_round()
         for key, p in self.PLAYERS.items():
             self.step_function.generate_shop(key, p)
@@ -136,6 +190,8 @@ class TFT_Simulator(ParallelEnv):
         self.step_function = Step_Function(self.pool_obj, self.game_observations)
         self.game_round = Game_Round(self.PLAYERS, self.pool_obj, self.step_function, self.rank)
         self.actions_taken = 0
+        self.runtime_stats = RuntimeStats()
+        self.runtime_stats.game_start_time = time.perf_counter()
         self.game_round.play_game_round()
         for key, p in self.PLAYERS.items():
             self.step_function.generate_shop(key, p)
@@ -191,6 +247,7 @@ class TFT_Simulator(ParallelEnv):
         Step function for parallel environment.
         actions: a dictionary of actions for each agent
         """
+        step_start = time.perf_counter()
         # Keep track of agents that were active at the start of the step
         # These agents must be in the return dictionaries
         active_this_step = self.agents[:]
@@ -211,7 +268,11 @@ class TFT_Simulator(ParallelEnv):
         # If we have reached the end of the turn for all agents
         if self.actions_taken >= config.ACTIONS_PER_TURN:
             self.actions_taken = 0
+            turn_start = time.perf_counter()
             self.game_round.play_game_round()
+            self.runtime_stats.record_turn(time.perf_counter() - turn_start)
+            for t in self.game_round.collect_combat_times():
+                self.runtime_stats.record_combat(t)
 
             # Check if the game is over
             if self.check_dead() <= 1 or self.game_round.current_round > 48:
@@ -222,6 +283,10 @@ class TFT_Simulator(ParallelEnv):
 
                 for agent in self.agents:
                     self.terminations[agent] = True
+                    self.infos[agent] = {
+                        "state_empty": True,
+                        "runtime_stats": self.runtime_stats.to_dict(),
+                    }
                 self.agents = []
 
             if self.agents:
@@ -232,6 +297,10 @@ class TFT_Simulator(ParallelEnv):
                 for k in self.kill_list:
                     self.terminations[k] = True
                     self.rewards[k] += (8 - len(_live_agents)) * 25
+                    self.infos[k] = {
+                        "state_empty": True,
+                        "runtime_stats": self.runtime_stats.to_dict(),
+                    }
                     if k in _live_agents:
                         _live_agents.remove(k)
                     self.PLAYERS[k] = None
@@ -253,6 +322,8 @@ class TFT_Simulator(ParallelEnv):
                 self.rewards[agent] += self.PLAYERS[agent].reward
                 # Reset the reward in the player object so it's not double-counted next step
                 self.PLAYERS[agent].reward = 0
+
+        self.runtime_stats.record_step(time.perf_counter() - step_start)
 
         # PettingZoo ParallelEnv expects only entries for current agents
         # except when they just terminated.
