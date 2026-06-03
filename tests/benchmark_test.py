@@ -24,19 +24,44 @@ from TFTSet4Gym.tft_set4_gym.tft_simulator import parallel_env
 BENCHMARK_RESULTS_PATH = os.path.join(os.path.dirname(__file__), 'benchmark_results.json')
 
 
+class MockAgent:
+    """A mock agent that simulates computational load for benchmarking agent overhead."""
+
+    def __init__(self, compute_time: float = 0.0, matrix_size: int = 100):
+        self.compute_time = compute_time
+        self.matrix_size = matrix_size
+
+    def predict(self, observation) -> Dict:
+        """
+        Simulate agent inference by sleeping (if compute_time > 0) and
+        performing a small matrix multiplication, then sampling a random action.
+        """
+        if self.compute_time > 0:
+            time.sleep(self.compute_time)
+        if self.matrix_size > 0:
+            a = np.random.randn(self.matrix_size, self.matrix_size)
+            b = np.random.randn(self.matrix_size, self.matrix_size)
+            _ = a @ b
+        return None
+
+
 class EnvironmentBenchmark:
     """Benchmark suite for TFT Set 4 Gym environment."""
     
-    def __init__(self, num_iterations: int = 100, num_steps_per_episode: int = 50):
+    def __init__(self, num_iterations: int = 100, num_steps_per_episode: int = 50,
+                 agent_policy: Optional[object] = None):
         """
         Initialize benchmark.
         
         Args:
             num_iterations: Number of iterations for timing tests
             num_steps_per_episode: Number of steps to run per episode in step timing tests
+            agent_policy: Optional agent object with a `predict(observation)` method.
+                          If None, defaults to random action sampling.
         """
         self.num_iterations = num_iterations
         self.num_steps_per_episode = num_steps_per_episode
+        self.agent_policy = agent_policy
         self.results = {}
         
     def get_memory_usage(self) -> float:
@@ -107,11 +132,17 @@ class EnvironmentBenchmark:
         }
     
     def benchmark_environment_step(self) -> Dict[str, float]:
-        """Benchmark environment step time."""
-        print("👟 Benchmarking environment steps...")
+        """Benchmark environment step time, with optional agent policy inference timing."""
+        using_agent = self.agent_policy is not None
+        if using_agent:
+            print("👟 Benchmarking environment steps (with agent policy)...")
+        else:
+            print("👟 Benchmarking environment steps...")
         
         env = parallel_env()
         step_times = []
+        inference_times = []
+        env_step_times = []
         
         # Run multiple episodes
         episodes = max(1, self.num_iterations // self.num_steps_per_episode)
@@ -126,18 +157,27 @@ class EnvironmentBenchmark:
                 if not env.agents:
                     break
                     
-                # Create random actions for all agents
+                # Create actions for all agents
                 actions = {}
                 for agent in env.agents:
-                    actions[agent] = env.action_space(agent).sample()
+                    if using_agent:
+                        inf_start = time.perf_counter()
+                        self.agent_policy.predict(observations[agent])
+                        inf_end = time.perf_counter()
+                        inference_times.append(inf_end - inf_start)
+                        action = env.action_space(agent).sample()
+                        actions[agent] = action
+                    else:
+                        actions[agent] = env.action_space(agent).sample()
                 
                 gc.collect()
-                start_time = time.perf_counter()
+                step_start = time.perf_counter()
                 
                 observations, rewards, terminations, truncations, infos = env.step(actions)
                 
-                end_time = time.perf_counter()
-                step_times.append(end_time - start_time)
+                step_end = time.perf_counter()
+                step_times.append(step_end - step_start)
+                env_step_times.append(step_end - step_start)
                 
                 # Break if game ended
                 if all(terminations.values()) or all(truncations.values()):
@@ -145,15 +185,26 @@ class EnvironmentBenchmark:
         
         env.close()
         
-        return {
+        result = {
             'mean': mean(step_times),
             'median': median(step_times),
             'std': stdev(step_times) if len(step_times) > 1 else 0,
             'min': min(step_times),
             'max': max(step_times),
             'total_steps': len(step_times),
-            'episodes': episodes
+            'episodes': episodes,
+            'env_step_time_mean': mean(env_step_times),
         }
+
+        if using_agent and inference_times:
+            agent_inf_mean = mean(inference_times)
+            total_per_step = agent_inf_mean + result['env_step_time_mean']
+            result['agent_inference_time_mean'] = agent_inf_mean
+            result['agent_overhead_percent'] = (
+                (agent_inf_mean / total_per_step) * 100 if total_per_step > 0 else 0
+            )
+
+        return result
     
     def benchmark_memory_usage(self) -> Dict[str, float]:
         """Benchmark memory usage during environment lifecycle."""
@@ -252,20 +303,35 @@ class EnvironmentBenchmark:
     
     def benchmark_full_episode(self) -> Dict[str, float]:
         """Run a full game episode and capture timing metrics from RuntimeStats."""
-        print("🎮 Benchmarking full game episode...")
+        using_agent = self.agent_policy is not None
+        if using_agent:
+            print("🎮 Benchmarking full game episode (with agent policy)...")
+        else:
+            print("🎮 Benchmarking full game episode...")
 
         env = parallel_env()
         observations, infos = env.reset()
 
         episode_start = time.perf_counter()
         step_count = 0
+        inference_times = []
+        env_step_times = []
 
         while env.agents:
             actions = {}
             for agent in env.agents:
+                if using_agent:
+                    inf_start = time.perf_counter()
+                    self.agent_policy.predict(observations[agent])
+                    inf_end = time.perf_counter()
+                    inference_times.append(inf_end - inf_start)
                 actions[agent] = env.action_space(agent).sample()
 
+            step_start = time.perf_counter()
             observations, rewards, terminations, truncations, infos = env.step(actions)
+            step_end = time.perf_counter()
+
+            env_step_times.append(step_end - step_start)
             step_count += 1
 
             if all(terminations.values()) or all(truncations.values()):
@@ -285,7 +351,16 @@ class EnvironmentBenchmark:
         result = {
             "episode_time_s": episode_time,
             "steps": step_count,
+            "env_step_time_mean": mean(env_step_times) if env_step_times else 0,
         }
+
+        if using_agent and inference_times:
+            agent_inf_mean = mean(inference_times)
+            total_per_step = agent_inf_mean + result["env_step_time_mean"]
+            result["agent_inference_time_mean"] = agent_inf_mean
+            result["agent_overhead_percent"] = (
+                (agent_inf_mean / total_per_step) * 100 if total_per_step > 0 else 0
+            )
 
         if stats:
             result.update({
@@ -366,6 +441,10 @@ class EnvironmentBenchmark:
         print(f"   Std Dev: {step['std']*1000:.2f}ms")
         print(f"   Range: {step['min']*1000:.2f}ms - {step['max']*1000:.2f}ms")
         print(f"   Steps/second: {1/step['mean']:.1f}")
+        if 'agent_inference_time_mean' in step:
+            print(f"   Agent inference time (avg): {step['agent_inference_time_mean']*1000:.2f}ms")
+            print(f"   Env step time (avg): {step['env_step_time_mean']*1000:.2f}ms")
+            print(f"   Agent overhead: {step['agent_overhead_percent']:.1f}%")
         
         # Memory Usage
         memory = self.results['memory_usage']
@@ -401,6 +480,9 @@ class EnvironmentBenchmark:
                 print(f"   Combat time (avg): {ep['combat_time_avg_ms']:.2f}ms")
             if 'step_time_avg_ms' in ep:
                 print(f"   Step time (avg): {ep['step_time_avg_ms']:.2f}ms")
+            if 'agent_inference_time_mean' in ep:
+                print(f"   Agent inference time (avg): {ep['agent_inference_time_mean']*1000:.2f}ms")
+                print(f"   Agent overhead: {ep['agent_overhead_percent']:.1f}%")
 
         # Performance Summary
         print(f"\n⚡ PERFORMANCE SUMMARY")
@@ -506,7 +588,8 @@ class EnvironmentBenchmark:
             'observation_processing': ['mean', 'median', 'std', 'min', 'max'],
             'memory_usage': ['after_creation_mb', 'after_reset_mb', 'during_steps_mean_mb',
                              'during_steps_max_mb', 'creation_overhead_mb', 'reset_overhead_mb'],
-            'full_episode': ['episode_time_s', 'turn_time_avg_ms', 'combat_time_avg_ms', 'step_time_avg_ms']
+            'full_episode': ['episode_time_s', 'turn_time_avg_ms', 'combat_time_avg_ms', 'step_time_avg_ms',
+                             'agent_inference_time_mean', 'agent_overhead_percent']
         }
 
 
@@ -528,6 +611,29 @@ def test_comprehensive_benchmark():
     benchmark = EnvironmentBenchmark(num_iterations=100, num_steps_per_episode=50)
     benchmark.run_full_benchmark()
     benchmark.print_results()
+
+
+@pytest.mark.benchmark
+def test_benchmark_with_agent_overhead():
+    """Run benchmark with a mock agent to measure agent overhead."""
+    print("🚀 Running Agent Overhead Benchmark...")
+    mock_agent = MockAgent(compute_time=0.001, matrix_size=50)
+    benchmark = EnvironmentBenchmark(
+        num_iterations=5, num_steps_per_episode=10, agent_policy=mock_agent
+    )
+    benchmark.run_full_benchmark()
+    benchmark.print_results()
+
+    step = benchmark.results['environment_step']
+    assert 'agent_inference_time_mean' in step
+    assert 'agent_overhead_percent' in step
+    assert step['agent_inference_time_mean'] > 0
+    assert step['agent_overhead_percent'] > 0
+
+    ep = benchmark.results['full_episode']
+    assert 'agent_inference_time_mean' in ep
+    assert 'agent_overhead_percent' in ep
+    assert ep['agent_inference_time_mean'] > 0
 
 
 def run_quick_benchmark():
@@ -554,6 +660,7 @@ if __name__ == "__main__":
     compare_path = None
     save_path = None
     run_mode = "quick"
+    use_agent = False
 
     args = sys.argv[1:]
     i = 0
@@ -564,6 +671,9 @@ if __name__ == "__main__":
         elif args[i] == "--save-path" and i + 1 < len(args):
             save_path = args[i + 1]
             i += 2
+        elif args[i] == "--agent":
+            use_agent = True
+            i += 1
         elif args[i] == "comprehensive":
             run_mode = "comprehensive"
             i += 1
@@ -586,10 +696,15 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # Run benchmark
+    agent_policy = MockAgent(compute_time=0.001, matrix_size=50) if use_agent else None
     if run_mode == "comprehensive":
-        benchmark = EnvironmentBenchmark(num_iterations=100, num_steps_per_episode=50)
+        benchmark = EnvironmentBenchmark(
+            num_iterations=100, num_steps_per_episode=50, agent_policy=agent_policy
+        )
     else:
-        benchmark = EnvironmentBenchmark(num_iterations=10, num_steps_per_episode=20)
+        benchmark = EnvironmentBenchmark(
+            num_iterations=10, num_steps_per_episode=20, agent_policy=agent_policy
+        )
 
     benchmark.run_full_benchmark()
     benchmark.print_results()
