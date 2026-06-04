@@ -209,7 +209,7 @@ class Player:
     
     @health.setter
     def health(self, new_health):
-        self._health = new_health
+        self._health = int(new_health)
 
     @property
     def win_streak(self):
