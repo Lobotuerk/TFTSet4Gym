@@ -267,7 +267,7 @@ def minion_combat(player, enemy, round, others):
         player.loss_round(damage)
         for p in alive:
             if p != player:
-                p.spill_reward(damage / len(alive))
+                p.spill_reward(int(damage / len(alive)))
         player.health -= damage
     # player wins!
     if index_won == 1:
@@ -281,4 +281,4 @@ def minion_combat(player, enemy, round, others):
         if len(alive) > 0:
             for p in alive:
                 if p != player:
-                    p.spill_reward(damage / len(alive))
+                    p.spill_reward(int(damage / len(alive)))

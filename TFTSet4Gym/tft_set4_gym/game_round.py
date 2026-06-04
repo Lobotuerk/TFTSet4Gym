@@ -124,7 +124,7 @@ class Game_Round:
                     for player in players.values():
                         if player != players[match[0]] and player != players[match[1]]:
                             if player:  # Not sure if there can be a dead player here.
-                                player.spill_reward(damage / (len(players) - 2))
+                                player.spill_reward(int(damage / (len(players) - 2)))
                     if len(players) == 2:
                         players[match[0]].spill_reward(damage)
                         players[match[1]].spill_reward(damage)
@@ -163,7 +163,7 @@ class Game_Round:
                             if other.health > 0 and other is not players[match[0]]:
                                 alive.append(other)
                     for other in alive:
-                        other.spill_reward(damage / len(alive))
+                        other.spill_reward(int(damage / len(alive)))
         log_to_file_combat()
         return True
 
