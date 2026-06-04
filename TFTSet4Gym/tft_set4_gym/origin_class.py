@@ -665,7 +665,7 @@ def moonlight(blue_team, red_team):
                 if is_trait(c, 'moonlight'):
                     c_level.append([c.stars, len(c.items), i])
             c_level.sort()
-            for i in range(0, tier):
+            for i in range(0, min(tier, len(c_level))):
                 teams[t][c_level[i][2]].golden()
 
 
