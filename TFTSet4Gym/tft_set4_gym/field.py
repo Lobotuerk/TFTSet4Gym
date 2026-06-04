@@ -65,7 +65,8 @@ def find_next_ranged_move(champion):
     neighbors = []
 
     for n in neighbors_original:
-        if not (coordinates[n[0]][n[1]] and coordinates[n[0]][n[1]] is not champion.target):
+        cell = coordinates[n[0]][n[1]]
+        if not (cell and cell is not champion.target):
             neighbors.append(n)
 
     for n in neighbors:
@@ -107,7 +108,8 @@ def find_path(champion, target_y, target_x, use_second=False, secondary_result=[
         neighbors = []
         # add into the neighbor -list if the tile is not visited, it's free or it contains the campion's target
         for n in neighbors_original:
-            if not (coordinates[n[0]][n[1]] and coordinates[n[0]][n[1]] is not champion.target) or n in visited:
+            cell = coordinates[n[0]][n[1]]
+            if not (cell and cell is not champion.target) or n in visited:
                 neighbors.append(n)
 
         for n in neighbors:
@@ -199,9 +201,10 @@ def find_enemies(champion):
     enemies = []
     for i, a_line in enumerate(c):
         for j, col in enumerate(a_line):
-            if c[i][j] and c[i][j].team != champion.team and c[i][j].champion:
-                d = distance(champion, c[i][j], True)
-                enemies.append([c[i][j], d])
+            cell = c[i][j]
+            if cell and cell.team != champion.team and cell.champion:
+                d = distance(champion, cell, True)
+                enemies.append([cell, d])
     enemies.sort(key=lambda x: x[1])
     return enemies
 
@@ -212,11 +215,12 @@ def enemies_in_distance(champion, target_y, target_x, radius):
     c = coordinates
     for i, line in enumerate(c):
         for j, col in enumerate(line):
-            if (c[i][j] and
-                    c[i][j].team != champion.team and
-                    c[i][j].champion and
+            cell = c[i][j]
+            if (cell and
+                    cell.team != champion.team and
+                    cell.champion and
                     distance({'y': j, 'x': i}, {'y': target_y, 'x': target_x}, False) <= radius):
-                enemies_within.append(c[i][j])
+                enemies_within.append(cell)
 
     return enemies_within
 
