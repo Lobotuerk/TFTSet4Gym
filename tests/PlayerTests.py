@@ -154,6 +154,28 @@ def test_loss_streak_gold():
         assert p1.gold == expected_gold, f"Loss streak {streak_val}: expected {expected_gold}, got {p1.gold}"
 
 
+@pytest.mark.player
+def test_player_health_integer():
+    """Verifies that the player health setter and spill_reward correctly convert/enforce integer health"""
+    p1 = setup()
+    
+    # 1. Direct assignment with float
+    p1.health = 98.85714285714286
+    assert isinstance(p1.health, int)
+    assert p1.health == 98
+    
+    # 2. Assignment with another float
+    p1.health = 50.1
+    assert isinstance(p1.health, int)
+    assert p1.health == 50
+
+    # 3. Via spill_reward
+    p1.health = 100
+    p1.spill_reward(2.5)
+    assert isinstance(p1.health, int)
+    assert p1.health == 97  # 100 - 2.5 = 97.5 -> cast to int -> 97
+
+
 # Legacy compatibility function
 def list_of_tests():
     """Legacy function for backward compatibility."""
@@ -166,6 +188,7 @@ def list_of_tests():
     test_income_cap()
     test_win_streak_gold()
     test_loss_streak_gold()
+    test_player_health_integer()
 
 
 if __name__ == "__main__":
