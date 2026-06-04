@@ -207,9 +207,10 @@ def annie(champion):
     neighbors = field.find_neighbors(cone_center[0], cone_center[1])
     neighbors.append(cone_center)
     for n in neighbors:
-        if n != leave_out and n[0] >= 0 and n[1] >= 0 and n[0] < 8 and n[1] < 7 and field.coordinates[n[0]][n[1]] \
-                and field.coordinates[n[0]][n[1]].team != champion.team and field.coordinates[n[0]][n[1]].champion:
-            champion.spell(field.coordinates[n[0]][n[1]], stats.ABILITY_DMG[champion.name][champion.stars])
+        if n != leave_out and n[0] >= 0 and n[1] >= 0 and n[0] < 8 and n[1] < 7:
+            cell = field.coordinates[n[0]][n[1]]
+            if cell and cell.team != champion.team and cell.champion:
+                champion.spell(cell, stats.ABILITY_DMG[champion.name][champion.stars])
 
     apply_attack_cooldown(champion)
     shield_amount = stats.SHIELD_AMOUNT[champion.name][champion.stars] * champion.SP
