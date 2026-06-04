@@ -166,7 +166,9 @@ def attack(champion, target, bonus_dmg=0, item_attack=False, trait_attack='', se
                 shield_old = target.shield_amount()
 
                 if len(target.shields) > 0:
-                    while not (damage <= 0 or target.shield_amount() <= 0):
+                    while damage > 0 and target.shield_amount() > 0:
+                        if len(target.shields) == 0:
+                            break
                         top_shield = target.shields[0]['amount']
                         target.shields[0]['amount'] -= damage
                         if target.shields[0]['amount'] < 0:

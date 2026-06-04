@@ -278,6 +278,8 @@ class champion:
                 shield_old = target.shield_amount()
                 if len(target.shields) > 0:
                     while damage > 0 and target.shield_amount() > 0:
+                        if len(target.shields) == 0:
+                            break
                         top_shield = target.shields[0]['amount']
                         target.shields[0]['amount'] -= damage
                         if target.shields[0]['amount'] < 0:
