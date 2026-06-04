@@ -115,11 +115,14 @@ def frozen_heart(champion):
 
     #if a unit has died and they had some enemies affected, clear those debuffs
     for i in range(0, 5):
+        surviving = []
         for u in frozen_heart_list:
             if(u[0] not in units):
                 for c in u[1]:
                     change_stat(c, 'AS', c.AS / item_stats.item_as_decrease['frozen_heart'])
-                frozen_heart_list.remove(u)
+            else:
+                surviving.append(u)
+        frozen_heart_list[:] = surviving
 
     has_item = list(filter(lambda x: 'frozen_heart' in x.items, units))
 
