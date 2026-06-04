@@ -38,11 +38,24 @@ class champion:
         self.name = name
         self.stars = stars
 
-        # in case we're spawning a construct, galio or a turret, the rest are handled at the bottom of the object
         if name != 'construct' and name != 'galio' and name != 'aphelios_turret':
             self.health = round(HEALTH[name] * config.STARMULTIPLIER ** (stars - 1), 1)
             self.max_health = round(HEALTH[name] * config.STARMULTIPLIER ** (stars - 1), 1)
             self.AD = round(AD[name] * config.STARMULTIPLIER ** (stars - 1), 1)
+        elif name == 'construct':
+            self.health = HEALTH[name][stars]
+            self.max_health = HEALTH[name][stars]
+            self.AD = AD[name]
+        elif name == 'galio':
+            self.health = HEALTH[name][stars] + HEALTH[name][stars] * config.GALIO_MULTIPLIER * \
+                          origin_class.cultist_stars[team]
+            self.max_health = HEALTH[name][stars] + HEALTH[name][stars] * config.GALIO_MULTIPLIER * \
+                              origin_class.cultist_stars[team]
+            self.AD = AD[name][stars] + AD[name][stars] * config.GALIO_MULTIPLIER * origin_class.cultist_stars[team]
+        elif name == 'aphelios_turret':
+            self.health = 1
+            self.max_health = 1
+            self.AD = overlord.AD
 
         self.SP = 1
 
@@ -151,23 +164,7 @@ class champion:
         if name in INITIATIVE_ACTIVE:
             getattr(active, name + '_init')(self)
 
-        # zzrot_portal's construct uses the same object so we have to correct the data a little
-        if name == 'construct':
-            self.health = HEALTH[name][stars]
-            self.max_health = HEALTH[name][stars]
-            self.AD = AD[name]
-
-        if name == 'galio':
-            self.health = HEALTH[name][stars] + HEALTH[name][stars] * config.GALIO_MULTIPLIER * \
-                          origin_class.cultist_stars[team]
-            self.max_health = HEALTH[name][stars] + HEALTH[name][stars] * config.GALIO_MULTIPLIER * \
-                              origin_class.cultist_stars[team]
-            self.AD = AD[name][stars] + AD[name][stars] * config.GALIO_MULTIPLIER * origin_class.cultist_stars[team]
-
         if name == 'aphelios_turret':
-            self.health = 1
-            self.max_health = 1
-            self.AD = self.overlord.AD
             self.AS = self.overlord.AS
 
     def attack(self, bonus_dmg=0, target=None, item_attack=False, trait_attack='', set_AD=None):

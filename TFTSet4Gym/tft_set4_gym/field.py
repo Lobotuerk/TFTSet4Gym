@@ -178,7 +178,7 @@ def find_target(c):
     # find the closest one
     for y in coordinates:
         for x in y:
-            if x is not None and x.team is not c.team and x.champion and x.health > 0:
+            if x is not None and x.team is not c.team and x.champion and getattr(x, 'health', 0) > 0:
                 x_coords = to_cube_coords(x)
                 dist = (abs(c_coords['x'] - x_coords['x']) + abs(c_coords['y'] - x_coords['y'])
                         + abs(c_coords['z'] - x_coords['z'])) / 2
