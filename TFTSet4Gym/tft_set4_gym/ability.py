@@ -1437,7 +1437,9 @@ def lissandra(champion):
         cone.append(c)
 
     # remove the dagger target since everyone in the cone will be taking secondary damage
-    cone.remove(tuple((dagger_target.y, dagger_target.x)))
+    dagger_coord = tuple((dagger_target.y, dagger_target.x))
+    if dagger_coord in cone:
+        cone.remove(dagger_coord)
 
     champion.spell(dagger_target, stats.ABILITY_DMG[champion.name][champion.stars])
 
@@ -2382,7 +2384,7 @@ def twistedfate_ability(champion, data):
 
     # drop off possible coordinates outside the map
     for i in range(0, 5):
-        for l in line:
+        for l in line[:]:
             if (l[0] < 0 or l[0] > 7 or l[1] < 0 or l[1] > 6):
                 line.remove(l)
 
