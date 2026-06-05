@@ -561,15 +561,15 @@ def duelist_helper(champion):
     tier = get_origin_class_tier(champion.team, 'duelist')
     stacks = -1
     if tier > 0:
-
-        if len(list(filter(lambda x: x[0] == champion, duelist_helper_list))) == 0:
-            duelist_helper_list.append([champion, 1])
+        _dh_list = duelist_helper_list
+        if len(list(filter(lambda x: x[0] == champion, _dh_list))) == 0:
+            _dh_list.append([champion, 1])
             stacks = 1
         else:
-            for i, d in enumerate(duelist_helper_list):
+            for i, d in enumerate(_dh_list):
                 if d[0] == champion:
-                    duelist_helper_list[i][1] += 1
-                    stacks = duelist_helper_list[i][1]
+                    _dh_list[i][1] += 1
+                    stacks = _dh_list[i][1]
 
         if stacks <= origin_class_stats.threshold['duelist']:
             end_AS = champion.AS * origin_class_stats.AS['duelist'][tier]
@@ -704,14 +704,15 @@ def shade_helper(champion):
 
     tier = get_origin_class_tier(champion.team, 'shade')
     if tier > 0:
+        _sh_list = shade_helper_list
         attacks = 1
-        if len(list(filter(lambda x: x[0] == champion, shade_helper_list))) == 0:
-            shade_helper_list.append([champion, 1])
+        if len(list(filter(lambda x: x[0] == champion, _sh_list))) == 0:
+            _sh_list.append([champion, 1])
         else:
-            for i, s in enumerate(shade_helper_list):
+            for i, s in enumerate(_sh_list):
                 if s[0] == champion:
-                    shade_helper_list[i][1] += 1
-                    attacks = shade_helper_list[i][1]
+                    _sh_list[i][1] += 1
+                    attacks = _sh_list[i][1]
 
         if attacks % 3 == 0:
             for c in champion.enemy_team():
