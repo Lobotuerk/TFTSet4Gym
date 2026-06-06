@@ -44,9 +44,8 @@ def test_build_observation_empty_player():
     
     # Check that health is set correctly in the observation
     health_slice = builder.current_player_schema.get_field_slice("health")
-    # Health is broadcased to (1, 4, 7) then flattened
-    expected_health = np.ones((1, 4, 7)) * 100
-    assert np.allclose(obs["tensor"][health_slice], expected_health.flatten())
+    expected_health = np.array([100.0])
+    assert np.allclose(obs["tensor"][health_slice], expected_health)
 
 @pytest.mark.unit
 @pytest.mark.observation
@@ -80,13 +79,12 @@ def test_build_observation_with_champions():
     board_stars = obs["tensor"][board_star_slice].reshape((1, 4, 7))
     assert board_stars[0, 0, 0] == 2.0
     
-    # Verify bench
+    # Verify bench (1D counts per champion type)
     bench_champ_slice = builder.current_player_schema.get_field_slice("bench_champions")
-    bench_champs = obs["tensor"][bench_champ_slice].reshape((58, 4, 7))
+    bench_champs = obs["tensor"][bench_champ_slice]
     ahri_idx = list(COST.keys()).index('ahri') - 1
-    # ahri is on bench[0]
-    # ObservationBuilder sums bench champions and broadcasts to (4, 7)
-    assert np.all(bench_champs[ahri_idx] == 1.0)
+    # ahri is on bench[0], bench count = 1
+    assert bench_champs[ahri_idx] == 1.0
 
 @pytest.mark.unit
 @pytest.mark.observation
@@ -119,17 +117,17 @@ def test_shop_vector():
     pool = MockPool()
     player = Player(pool, 0)
     
-    # Create a mock shop vector (62, 4, 7)
-    shop_vector = np.random.rand(62, 4, 7)
+    # Create a mock shop vector (59,): [0:58] champion counts, [58] chosen index
+    shop_vector = np.random.rand(59)
     
     obs = builder.build_observation("player_0", player, shop_vector=shop_vector)
     
     shop_champ_slice = builder.current_player_schema.get_field_slice("shop_champions")
-    shop_champs = obs["tensor"][shop_champ_slice].reshape((58, 4, 7))
+    shop_champs = obs["tensor"][shop_champ_slice]
     assert np.allclose(shop_champs, shop_vector[0:58])
     
     shop_chosen_slice = builder.current_player_schema.get_field_slice("shop_chosen")
-    shop_chosen = obs["tensor"][shop_chosen_slice].reshape((1, 4, 7))
+    shop_chosen = obs["tensor"][shop_chosen_slice]
     assert np.allclose(shop_chosen, shop_vector[58:59])
 
 @pytest.mark.unit
@@ -139,7 +137,7 @@ def test_get_set_field():
     obs = np.zeros(builder.current_player_schema.total_size)
     
     # Test setting and getting gold
-    gold_val = np.ones((1, 4, 7)) * 50
+    gold_val = np.ones((1,)) * 50
     obs = builder.set_field_in_observation(obs, "gold", gold_val)
     
     retrieved_gold = builder.get_field_from_observation(obs, "gold")
@@ -196,8 +194,8 @@ def test_observation_manager_mixin():
             
         def get_observation_for_field(self, field_name):
             if field_name == "gold":
-                return np.ones((1, 4, 7)) * self.gold
-            return np.zeros((1, 4, 7))
+                return np.ones((1,)) * self.gold
+            return np.zeros((1,))
 
     player = TestPlayer()
     assert hasattr(player, "_obs_builder")
@@ -235,7 +233,7 @@ def test_convenience_functions():
     
     # Test get/set convenience
     obs = obs_dict["tensor"]
-    gold_val = np.ones((1, 4, 7)) * 75
+    gold_val = np.ones((1,)) * 75
     obs = set_field_value_in_obs(obs, "gold", gold_val)
     retrieved = get_field_value_from_obs(obs, "gold")
     assert np.allclose(retrieved, gold_val)

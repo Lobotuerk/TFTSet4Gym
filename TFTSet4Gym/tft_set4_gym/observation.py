@@ -135,9 +135,8 @@ class Observation:
                     player who the shop belongs to.
     '''
     def generate_shop_vector(self, shop, player):
-        # each champion has 6 bit for the name, 1 bit for the chosen.
-        # 5 of them makes it 35.
-        output_array = np.zeros((62, 4, 7))
+        # 1D vector: [0:58] champion counts, [58] chosen champion index
+        output_array = np.zeros(59)
         shop_chosen = False
         chosen_shop_index = -1
         chosen_shop = ''
@@ -195,10 +194,9 @@ class Observation:
         if player.bench_full():
             self.shop_mask = np.zeros(5)
 
-        for n, _ in enumerate(shop_counts):
-            output_array[n] = np.ones((4,7)) * shop_counts[n]
+        output_array[:58] = shop_counts.flatten()
         if chosen_shop != '':
-            output_array[58] = np.ones((4,7)) * (list(COST.keys()).index(chosen_shop.split('_')[0])-1)
+            output_array[58] = list(COST.keys()).index(chosen_shop.split('_')[0]) - 1
 
         self.shop_vector = output_array
         player.shop_mask = self.shop_mask

@@ -6,7 +6,7 @@ NUM_CHAMPIONS = 58
 BOARD_CHAMPIONS_ELEMS = 58 * 4 * 7
 BOARD_STARS_ELEMS = 1 * 4 * 7
 BOARD_CHOSEN_ELEMS = 1 * 4 * 7
-BENCH_CHAMPIONS_ELEMS = 58 * 4 * 7
+BENCH_CHAMPIONS_ELEMS = 58
 
 BOARD_CHAMPIONS_START = 0
 BOARD_STARS_START = BOARD_CHAMPIONS_ELEMS
@@ -21,7 +21,7 @@ def encode_champion_availability(observation: np.ndarray) -> np.ndarray:
     board_champions = obs[BOARD_CHAMPIONS_START:BOARD_CHAMPIONS_START + BOARD_CHAMPIONS_ELEMS].reshape(58, 4, 7)
     board_stars = obs[BOARD_STARS_START:BOARD_STARS_START + BOARD_STARS_ELEMS].reshape(1, 4, 7)
     board_chosen = obs[BOARD_CHOSEN_START:BOARD_CHOSEN_START + BOARD_CHOSEN_ELEMS].reshape(1, 4, 7)
-    bench_champions = obs[BENCH_CHAMPIONS_START:BENCH_CHAMPIONS_START + BENCH_CHAMPIONS_ELEMS].reshape(58, 4, 7)
+    bench_champions = obs[BENCH_CHAMPIONS_START:BENCH_CHAMPIONS_START + BENCH_CHAMPIONS_ELEMS]  # (58,)
 
     level = np.zeros(58)
     chosen = np.zeros(58)
@@ -31,7 +31,7 @@ def encode_champion_availability(observation: np.ndarray) -> np.ndarray:
         if len(ys) > 0:
             level[n] = max(board_stars[0, y, x] for y, x in zip(ys, xs))
             chosen[n] = 1.0 if any(board_chosen[0, y, x] > 0.5 for y, x in zip(ys, xs)) else 0.0
-        elif np.any(bench_champions[n] > 0.5):
+        elif bench_champions[n] > 0.5:
             level[n] = 1.0
 
     result = np.zeros(2 * 58)
