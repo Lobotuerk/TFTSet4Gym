@@ -2,6 +2,7 @@ from . import config
 import functools
 import gymnasium as gym
 import numpy as np
+import random
 import time
 from gymnasium.spaces import MultiDiscrete, Box, Dict
 from . import pool
@@ -180,6 +181,9 @@ class TFT_Simulator(ParallelEnv):
         return num_alive
 
     def reset(self, seed=None, options=None):
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
         self.pool_obj = pool.pool()
         self.PLAYERS = {"player_" + str(player_id): player_class(self.pool_obj, player_id)
                         for player_id in range(config.NUM_PLAYERS)}
