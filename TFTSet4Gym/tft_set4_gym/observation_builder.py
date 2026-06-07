@@ -90,16 +90,15 @@ class ObservationBuilder:
         except Exception as e:
             print(f"Warning: Error encoding board for observation - {e}")
 
-        # 2. Bench state (1D counts per champion type)
+        # 2. Bench state (flat 1D vector, one entry per champion type)
         try:
-            bench_count = np.zeros(58)
+            bench_champions = np.zeros(58)
             for unit in player.bench:
                 if unit:
                     # CHAMPION_NAMES index mapping (consistent with encode_champ_object)
                     c_index = list(COST.keys()).index(unit.name)
-                    bench_count[c_index-1] += 1
-            
-            set_field("bench_champions", bench_count)
+                    bench_champions[c_index-1] += 1
+            set_field("bench_champions", bench_champions)
         except Exception as e:
             print(f"Warning: Error encoding bench for observation - {e}")
 

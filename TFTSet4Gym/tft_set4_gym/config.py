@@ -14,7 +14,7 @@ LOG_COMBAT = False
 DEBUG = False
 
 # Observation size - will be updated by schema system
-OBSERVATION_SIZE = 5152  # Default, updated dynamically by schema
+OBSERVATION_SIZE = 1804  # Default, updated dynamically by schema
 OBSERVATION_TIME_STEPS = 1
 OBSERVATION_TIME_STEP_INTERVAL = 1
 ACTION_DIM = [7, 37, 10]

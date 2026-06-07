@@ -83,27 +83,29 @@ class ObservationSchemaRegistry:
         """Setup the default TFT observation schemas."""
         
         # Current player observation schema
+        # Board fields retain spatial (4, 7) dimensions since position matters.
+        # Bench, shop, and scalar fields are flattened (no spatial redundancy).
         current_player_fields = [
             # Board representation (58 champions, 4x7 grid)
             ObservationField("board_champions", (58, 4, 7), np.dtype('float64'), "Champion positions on board"),
             ObservationField("board_stars", (1, 4, 7), np.dtype('float64'), "Star levels of champions on board"),
             ObservationField("board_chosen", (1, 4, 7), np.dtype('float64'), "Chosen status of champions on board"),
             
-            # Bench representation (58 possible champions, 1D counts)
+            # Bench representation (58 possible champions, flattened)
             ObservationField("bench_champions", (58,), np.dtype('float64'), "Champions on bench by type"),
             
-            # Player state (scalars)
+            # Player state (scalars, flattened)
             ObservationField("health", (1,), np.dtype('float64'), "Player health"),
             ObservationField("turns_for_combat", (1,), np.dtype('float64'), "Remaining action turns"),
             ObservationField("level", (1,), np.dtype('float64'), "Player level"),
             ObservationField("round", (1,), np.dtype('float64'), "Current round number"),
             
-            # Private information (scalars)
+            # Private information (scalars, flattened)
             ObservationField("exp_to_level", (1,), np.dtype('float64'), "Experience needed to level"),
             ObservationField("gold", (1,), np.dtype('float64'), "Current gold amount"),
             ObservationField("streak", (1,), np.dtype('float64'), "Win/loss streak"),
             
-            # Shop information (1D)
+            # Shop information (flattened)
             ObservationField("shop_champions", (58,), np.dtype('float64'), "Available champions in shop"),
             ObservationField("shop_chosen", (1,), np.dtype('float64'), "Chosen champion in shop"),
         ]
