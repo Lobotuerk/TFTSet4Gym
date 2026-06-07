@@ -1,6 +1,7 @@
 from .tft_simulator import TFT_Simulator, parallel_env
+from .game_recorder import GameRecorder, load_trajectory, replay_trajectory
 
-__all__ = ['TFT_Simulator', 'parallel_env']
+__all__ = ['TFT_Simulator', 'parallel_env', 'GameRecorder', 'load_trajectory', 'replay_trajectory']
 
 # Initialize observation schema and update config
 try:
