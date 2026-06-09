@@ -42,13 +42,16 @@ class Observation:
                     The next action format to use if using a 1d action space.
     Outputs     - A dictionary with a tensor field (input to the representation network) and a mask for legal actions
     """
-    def observation(self, player_id: str, player, action_vector=np.array([])):
+    def observation(self, player_id: str, player, action_vector=np.array([]),
+                    all_players=None):
         """
         Create observation using the modern schema system.
         Maintains backward compatibility with existing interface.
         """
         # Build the main observation using the schema
-        obs_dict = self.builder.build_observation(player_id, player, self.shop_vector)
+        obs_dict = self.builder.build_observation(
+            player_id, player, self.shop_vector, all_players
+        )
         
         # Handle time-stepped observations (existing logic)
         game_state_tensor = obs_dict["tensor"]
