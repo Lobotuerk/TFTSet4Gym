@@ -3,11 +3,20 @@ Centralized observation builder for TFT Set 4 Gym.
 This module handles the construction of observations using the centralized schema.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import numpy as np
 from .observation_schema import get_observation_schema, OBSERVATION_REGISTRY
 from . import config
 from .stats import COST
+from .item_stats import uncraftable_items, item_builds
+
+
+def encode_item_id(item_name: str) -> float:
+    if item_name in uncraftable_items:
+        return float(list(uncraftable_items).index(item_name) + 1)
+    elif item_name in item_builds.keys():
+        return float(list(item_builds.keys()).index(item_name) + 1 + len(uncraftable_items))
+    return 0.0
 
 
 class ObservationBuilder:
@@ -17,7 +26,7 @@ class ObservationBuilder:
         self.current_player_schema = get_observation_schema("current_player")
         self.action_mask_schema = get_observation_schema("action_mask")
     
-    def build_observation(self, player_id: str, player: Any, shop_vector: Optional[np.ndarray] = None) -> Dict[str, np.ndarray]:
+    def build_observation(self, player_id: str, player: Any, shop_vector: Optional[np.ndarray] = None, all_players: Optional[Dict[str, Any]] = None) -> Dict[str, np.ndarray]:
         """
         Build a complete observation for a player.
         
@@ -25,12 +34,13 @@ class ObservationBuilder:
             player_id: The player identifier
             player: The player object containing state
             shop_vector: Optional shop vector override
+            all_players: Optional dict of all players for opponent context
             
         Returns:
             Dictionary containing 'tensor' and 'action_mask' keys
         """
         # Create the tensor observation
-        tensor_obs = self._build_tensor_observation(player, shop_vector)
+        tensor_obs = self._build_tensor_observation(player, shop_vector, all_players=all_players)
         
         # Create action mask (simplified for now)
         action_mask = self._build_action_mask(player)
@@ -40,7 +50,7 @@ class ObservationBuilder:
             "action_mask": action_mask
         }
     
-    def _build_tensor_observation(self, player: Any, shop_vector: Optional[np.ndarray] = None) -> np.ndarray:
+    def _build_tensor_observation(self, player: Any, shop_vector: Optional[np.ndarray] = None, all_players: Optional[Dict[str, Any]] = None) -> np.ndarray:
         """Build the main tensor observation by reading player properties directly."""
         schema = self.current_player_schema
         observation = np.zeros(schema.total_size, dtype=np.float64)
@@ -69,16 +79,12 @@ class ObservationBuilder:
                     
                 observation[field_slice] = val_arr.flatten()
             except KeyError:
-                # Field not in schema, skip it
                 pass
 
         # 1. Board state - Read directly from player.board encoded_list
         try:
-            # board[x] is an encoded_list(4, encode_champ_object) -> get_encoding() is (60, 1, 4)
-            # We want (60, 4, 7)
             board_encodings = []
             for x in range(7):
-                # Reshape (60, 1, 4) to (60, 4, 1)
                 enc = player.board[x].get_encoding()
                 board_encodings.append(enc.reshape((60, 4, 1)))
             
@@ -87,28 +93,58 @@ class ObservationBuilder:
             set_field("board_champions", board_tensor[0:58])
             set_field("board_stars", board_tensor[58:59])
             set_field("board_chosen", board_tensor[59:60])
+
+            # Board items (extracted directly from champion objects)
+            board_items = np.zeros((3, 4, 7))
+            for x in range(7):
+                for y in range(4):
+                    champ = player.board[x][y]
+                    if champ is not None:
+                        for item_idx, item in enumerate(getattr(champ, 'items', [])[:3]):
+                            board_items[item_idx, x, y] = encode_item_id(item)
+            set_field("board_items", board_items)
         except Exception as e:
             print(f"Warning: Error encoding board for observation - {e}")
 
-        # 2. Bench state (flat 1D vector, one entry per champion type)
+        # 2. Bench state (slot-wise, 9 slots)
         try:
-            bench_champions = np.zeros(58)
-            for unit in player.bench:
+            bench_champions = np.zeros((58, 9))
+            bench_stars = np.zeros((1, 9))
+            bench_items = np.zeros((3, 9))
+
+            for slot_idx in range(9):
+                unit = player.bench[slot_idx]
                 if unit:
-                    # CHAMPION_NAMES index mapping (consistent with encode_champ_object)
                     c_index = list(COST.keys()).index(unit.name)
-                    bench_champions[c_index-1] += 1
+                    bench_champions[c_index - 1, slot_idx] = 1.0
+                    bench_stars[0, slot_idx] = getattr(unit, 'stars', 1)
+                    for item_idx, item in enumerate(getattr(unit, 'items', [])[:3]):
+                        bench_items[item_idx, slot_idx] = encode_item_id(item)
+
             set_field("bench_champions", bench_champions)
+            set_field("bench_stars", bench_stars)
+            set_field("bench_items", bench_items)
         except Exception as e:
             print(f"Warning: Error encoding bench for observation - {e}")
 
-        # 3. Player state (Public)
+        # 3. Item bench / inventory
+        try:
+            item_bench = np.zeros(10)
+            for i in range(len(player.item_bench)):
+                item = player.item_bench[i]
+                if item:
+                    item_bench[i] = encode_item_id(item)
+            set_field("item_bench", item_bench)
+        except Exception as e:
+            print(f"Warning: Error encoding item bench for observation - {e}")
+
+        # 4. Player state (Public)
         set_field("health", player.health)
         set_field("turns_for_combat", player.turns_for_combat)
         set_field("level", player.level)
         set_field("round", player.round)
         
-        # 4. Player state (Private)
+        # 5. Player state (Private)
         try:
             exp_to_level = player.level_costs[player.level] - player.exp
         except (IndexError, AttributeError):
@@ -120,11 +156,33 @@ class ObservationBuilder:
         streak = player.loss_streak if abs(player.loss_streak) > player.win_streak else player.win_streak
         set_field("streak", streak)
         
-        # 5. Shop state
+        # 6. Shop state
         if shop_vector is not None:
-            # shop_vector is expected to be (59,) [0:58 champion counts, 58: chosen index]
             set_field("shop_champions", shop_vector[0:58])
             set_field("shop_chosen", shop_vector[58:59])
+        set_field("shop_locked", float(getattr(player, 'shop_locked', False)))
+
+        # 7. Opponents (public context)
+        if all_players and len(all_players) > 1:
+            try:
+                opponents_health = np.zeros(7)
+                opponents_level = np.zeros(7)
+                opponents_gold = np.zeros(7)
+                opp_idx = 0
+                for pid, opp in all_players.items():
+                    if pid == player.player_num:
+                        continue
+                    if opp_idx >= 7:
+                        break
+                    opponents_health[opp_idx] = getattr(opp, 'health', 0)
+                    opponents_level[opp_idx] = getattr(opp, 'level', 0)
+                    opponents_gold[opp_idx] = getattr(opp, 'gold', 0)
+                    opp_idx += 1
+                set_field("opponents_health", opponents_health)
+                set_field("opponents_level", opponents_level)
+                set_field("opponents_gold", opponents_gold)
+            except Exception as e:
+                print(f"Warning: Error encoding opponents for observation - {e}")
         
         return observation
     
@@ -186,10 +244,10 @@ def update_config_observation_size():
 
 
 # Convenience functions for backward compatibility
-def build_observation(player_id: str, player: Any, shop_vector: Optional[np.ndarray] = None) -> Dict[str, np.ndarray]:
+def build_observation(player_id: str, player: Any, shop_vector: Optional[np.ndarray] = None, all_players: Optional[Dict[str, Any]] = None) -> Dict[str, np.ndarray]:
     """Convenience function to build observation."""
     builder = ObservationBuilder()
-    return builder.build_observation(player_id, player, shop_vector)
+    return builder.build_observation(player_id, player, shop_vector, all_players=all_players)
 
 
 def get_field_slice(field_name: str) -> slice:

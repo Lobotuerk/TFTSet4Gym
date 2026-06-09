@@ -107,6 +107,7 @@ class Player:
         self.opponent = None  # Other player, player object
         self.opponent_board = None  # Other player's board for combat, not sure if I will use this.
         self.chosen = False  # Does this player have a chosen unit already
+        self.shop_locked = False  # Whether the shop is locked
         self.log = []
 
         # I need to comment how this works.

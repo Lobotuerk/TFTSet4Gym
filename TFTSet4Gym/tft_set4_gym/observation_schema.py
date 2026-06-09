@@ -90,24 +90,36 @@ class ObservationSchemaRegistry:
             ObservationField("board_champions", (58, 4, 7), np.dtype('float64'), "Champion positions on board"),
             ObservationField("board_stars", (1, 4, 7), np.dtype('float64'), "Star levels of champions on board"),
             ObservationField("board_chosen", (1, 4, 7), np.dtype('float64'), "Chosen status of champions on board"),
-            
-            # Bench representation (58 possible champions, flattened)
-            ObservationField("bench_champions", (58,), np.dtype('float64'), "Champions on bench by type"),
-            
+            ObservationField("board_items", (3, 4, 7), np.dtype('float64'), "Equipped items on board champions"),
+
+            # Bench representation (slot-wise, 9 bench slots)
+            ObservationField("bench_champions", (58, 9), np.dtype('float64'), "Champions on bench by slot"),
+            ObservationField("bench_stars", (1, 9), np.dtype('float64'), "Star levels of bench champions"),
+            ObservationField("bench_items", (3, 9), np.dtype('float64'), "Items on bench champions"),
+
+            # Item bench / inventory
+            ObservationField("item_bench", (10,), np.dtype('float64'), "Unequipped items on item bench"),
+
             # Player state (scalars, flattened)
             ObservationField("health", (1,), np.dtype('float64'), "Player health"),
             ObservationField("turns_for_combat", (1,), np.dtype('float64'), "Remaining action turns"),
             ObservationField("level", (1,), np.dtype('float64'), "Player level"),
             ObservationField("round", (1,), np.dtype('float64'), "Current round number"),
-            
+
             # Private information (scalars, flattened)
             ObservationField("exp_to_level", (1,), np.dtype('float64'), "Experience needed to level"),
             ObservationField("gold", (1,), np.dtype('float64'), "Current gold amount"),
             ObservationField("streak", (1,), np.dtype('float64'), "Win/loss streak"),
-            
+
             # Shop information (flattened)
             ObservationField("shop_champions", (58,), np.dtype('float64'), "Available champions in shop"),
             ObservationField("shop_chosen", (1,), np.dtype('float64'), "Chosen champion in shop"),
+            ObservationField("shop_locked", (1,), np.dtype('float64'), "Whether the shop is locked"),
+
+            # Opponents (public context)
+            ObservationField("opponents_health", (7,), np.dtype('float64'), "Health levels of the 7 opponents"),
+            ObservationField("opponents_level", (7,), np.dtype('float64'), "Player levels of the 7 opponents"),
+            ObservationField("opponents_gold", (7,), np.dtype('float64'), "Gold categories/ranges of the 7 opponents"),
         ]
         
         self.register_schema("current_player", ObservationSchema(current_player_fields))

@@ -1,9 +1,9 @@
 import pytest
 import numpy as np
-from TFTSet4Gym.tft_set4_gym.observation_builder import ObservationBuilder, ObservationManagerMixin
+from TFTSet4Gym.tft_set4_gym.observation_builder import ObservationBuilder, ObservationManagerMixin, encode_item_id
 from TFTSet4Gym.tft_set4_gym.player import Player, encoded_list, encode_champ_object
 from TFTSet4Gym.tft_set4_gym.stats import COST
-from unittest.mock import MagicMock
+from TFTSet4Gym.tft_set4_gym.item_stats import uncraftable_items, item_builds
 
 class MockPool:
     def __init__(self):
@@ -12,10 +12,11 @@ class MockPool:
         pass
 
 class MockChampion:
-    def __init__(self, name, stars=1, chosen=False):
+    def __init__(self, name, stars=1, chosen=False, items=None):
         self.name = name
         self.stars = stars
         self.chosen = chosen
+        self.items = items or []
 
 @pytest.mark.unit
 @pytest.mark.observation
@@ -79,12 +80,12 @@ def test_build_observation_with_champions():
     board_stars = obs["tensor"][board_star_slice].reshape((1, 4, 7))
     assert board_stars[0, 0, 0] == 2.0
     
-    # Verify bench (1D counts per champion type)
+    # Verify bench (2D: champion_type x bench_slot)
     bench_champ_slice = builder.current_player_schema.get_field_slice("bench_champions")
-    bench_champs = obs["tensor"][bench_champ_slice]
+    bench_champs = obs["tensor"][bench_champ_slice].reshape((58, 9))
     ahri_idx = list(COST.keys()).index('ahri') - 1
-    # ahri is on bench[0], bench count = 1
-    assert bench_champs[ahri_idx] == 1.0
+    # ahri is on bench[0], slot 0
+    assert bench_champs[ahri_idx, 0] == 1.0
 
 @pytest.mark.unit
 @pytest.mark.observation
@@ -237,3 +238,153 @@ def test_convenience_functions():
     obs = set_field_value_in_obs(obs, "gold", gold_val)
     retrieved = get_field_value_from_obs(obs, "gold")
     assert np.allclose(retrieved, gold_val)
+
+
+@pytest.mark.unit
+@pytest.mark.observation
+def test_board_items_field():
+    builder = ObservationBuilder()
+    pool = MockPool()
+    player = Player(pool, 0)
+
+    aatrox = MockChampion('aatrox', stars=2, chosen=False, items=['bf_sword', 'chain_vest'])
+    player.board[0][0] = aatrox
+
+    obs = builder.build_observation("player_0", player)
+
+    board_items = builder.get_field_from_observation(obs["tensor"], "board_items")
+
+    assert board_items.shape == (3, 4, 7)
+    bf_sword_id = encode_item_id('bf_sword')
+    chain_vest_id = encode_item_id('chain_vest')
+    assert board_items[0, 0, 0] == bf_sword_id
+    assert board_items[1, 0, 0] == chain_vest_id
+    assert board_items[2, 0, 0] == 0.0
+
+
+@pytest.mark.unit
+@pytest.mark.observation
+def test_bench_slot_wise():
+    builder = ObservationBuilder()
+    pool = MockPool()
+    player = Player(pool, 0)
+
+    ahri = MockChampion('ahri', stars=3, chosen=False, items=['rabadons_deathcap'])
+    player.bench[2] = ahri
+
+    obs = builder.build_observation("player_0", player)
+
+    bench_champs = builder.get_field_from_observation(obs["tensor"], "bench_champions")
+    assert bench_champs.shape == (58, 9)
+
+    ahri_idx = list(COST.keys()).index('ahri') - 1
+    assert bench_champs[ahri_idx, 2] == 1.0
+
+    bench_stars = builder.get_field_from_observation(obs["tensor"], "bench_stars")
+    assert bench_stars.shape == (1, 9)
+    assert bench_stars[0, 2] == 3.0
+
+    bench_items = builder.get_field_from_observation(obs["tensor"], "bench_items")
+    assert bench_items.shape == (3, 9)
+    rabadons_id = encode_item_id('rabadons_deathcap')
+    assert bench_items[0, 2] == rabadons_id
+
+
+@pytest.mark.unit
+@pytest.mark.observation
+def test_item_bench_field():
+    builder = ObservationBuilder()
+    pool = MockPool()
+    player = Player(pool, 0)
+
+    player.add_to_item_bench('bf_sword')
+    player.add_to_item_bench('chain_vest')
+
+    obs = builder.build_observation("player_0", player)
+
+    item_bench = builder.get_field_from_observation(obs["tensor"], "item_bench")
+    assert item_bench.shape == (10,)
+    bf_sword_id = encode_item_id('bf_sword')
+    chain_vest_id = encode_item_id('chain_vest')
+    assert item_bench[0] == bf_sword_id
+    assert item_bench[1] == chain_vest_id
+    assert item_bench[2] == 0.0
+
+
+@pytest.mark.unit
+@pytest.mark.observation
+def test_shop_locked_field():
+    builder = ObservationBuilder()
+    pool = MockPool()
+    player = Player(pool, 0)
+
+    player.shop_locked = True
+    obs = builder.build_observation("player_0", player)
+    shop_locked = builder.get_field_from_observation(obs["tensor"], "shop_locked")
+    assert shop_locked.shape == (1,)
+    assert shop_locked[0] == 1.0
+
+    player.shop_locked = False
+    obs = builder.build_observation("player_0", player)
+    shop_locked = builder.get_field_from_observation(obs["tensor"], "shop_locked")
+    assert shop_locked[0] == 0.0
+
+
+@pytest.mark.unit
+@pytest.mark.observation
+def test_opponents_fields():
+    builder = ObservationBuilder()
+    pool = MockPool()
+
+    class MockOpponent:
+        def __init__(self, player_num, health, level, gold):
+            self.player_num = player_num
+            self.health = health
+            self.level = level
+            self.gold = gold
+
+    main_player = Player(pool, 0)
+    main_player.health = 100
+    main_player.gold = 50
+
+    opponents = {
+        0: main_player,
+        1: MockOpponent(1, 80, 7, 30),
+        2: MockOpponent(2, 60, 6, 20),
+        3: MockOpponent(3, 40, 5, 10),
+    }
+
+    obs = builder.build_observation("player_0", main_player, all_players=opponents)
+
+    opp_health = builder.get_field_from_observation(obs["tensor"], "opponents_health")
+    opp_level = builder.get_field_from_observation(obs["tensor"], "opponents_level")
+    opp_gold = builder.get_field_from_observation(obs["tensor"], "opponents_gold")
+
+    assert opp_health.shape == (7,)
+    assert opp_level.shape == (7,)
+    assert opp_gold.shape == (7,)
+
+    assert opp_health[0] == 80
+    assert opp_level[0] == 7
+    assert opp_gold[0] == 30
+    assert opp_health[1] == 60
+    assert opp_gold[1] == 20
+    assert np.all(opp_health[3:] == 0)
+
+
+@pytest.mark.unit
+@pytest.mark.observation
+def test_encode_item_id():
+    bf_sword_id = encode_item_id('bf_sword')
+    assert bf_sword_id > 0
+
+    unknown_id = encode_item_id('nonexistent_item')
+    assert unknown_id == 0.0
+
+    first_uncraftable = list(uncraftable_items)[0]
+    first_id = encode_item_id(first_uncraftable)
+    assert first_id == 1.0
+
+    first_craftable = list(item_builds.keys())[0]
+    craftable_id = encode_item_id(first_craftable)
+    assert craftable_id > len(uncraftable_items) + 0.0
