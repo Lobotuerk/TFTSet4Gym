@@ -101,15 +101,20 @@ class Observation:
         for player_id in players:
             other_player = players[player_id]
             if other_player != cur_player:
-                other_player_vector = np.zeros((26,6,10))
+                other_player_vector = np.zeros((26, 6, 10))
                 if other_player:
                     other_player_vector = other_player.player_public_vector
-                # other_player.board_vector,
-                # other_player.bench_vector,
-                # other_player.chosen_vector,
-                # other_player.item_vector,
                 self.other_player_observations[player_id] = other_player_vector
         self.turn_since_update = 0
+
+    def build_full_observation(self, player_id: str, player, players: dict,
+                                shop_vector=None) -> dict:
+        """Build observation including opponent data using the new schema.
+
+        Returns a dict with 'tensor' and 'action_mask' keys, where the tensor
+        includes opponent_boards and opponent_info fields.
+        """
+        return self.builder.build_full_observation(player_id, player, players, shop_vector)
 
     """
     Description - Generates the vector for a comp tier for a given player. This is equal to the game compositions bar 

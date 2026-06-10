@@ -1,9 +1,10 @@
 import pytest
 import numpy as np
 from TFTSet4Gym.tft_set4_gym.observation_builder import ObservationBuilder, ObservationManagerMixin
-from TFTSet4Gym.tft_set4_gym.player import Player, encoded_list, encode_champ_object
+from TFTSet4Gym.tft_set4_gym.player import Player, encoded_list
 from TFTSet4Gym.tft_set4_gym.stats import COST
 from unittest.mock import MagicMock
+
 
 class MockPool:
     def __init__(self):
@@ -11,11 +12,15 @@ class MockPool:
     def update_pool(self, name, amount):
         pass
 
+
 class MockChampion:
-    def __init__(self, name, stars=1, chosen=False):
+    def __init__(self, name, stars=1, chosen=False, items=None, origin=None):
         self.name = name
         self.stars = stars
         self.chosen = chosen
+        self.items = items or []
+        self.origin = origin or []
+
 
 @pytest.mark.unit
 @pytest.mark.observation
@@ -24,28 +29,29 @@ def test_observation_builder_init():
     assert builder.current_player_schema is not None
     assert builder.action_mask_schema is not None
 
+
 @pytest.mark.unit
 @pytest.mark.observation
 def test_build_observation_empty_player():
     builder = ObservationBuilder()
     pool = MockPool()
     player = Player(pool, 0)
-    
-    # Initialize basic player state
+
     player.health = 100
     player.level = 1
     player.gold = 0
-    
+
     obs = builder.build_observation("player_0", player)
-    
+
     assert "tensor" in obs
     assert "action_mask" in obs
     assert obs["tensor"].shape == (builder.current_player_schema.total_size,)
-    
-    # Check that health is set correctly in the observation
-    health_slice = builder.current_player_schema.get_field_slice("health")
-    expected_health = np.array([100.0])
-    assert np.allclose(obs["tensor"][health_slice], expected_health)
+
+    # Check player_state field
+    player_state_slice = builder.current_player_schema.get_field_slice("player_state")
+    player_state = obs["tensor"][player_state_slice].reshape((7,))
+    assert player_state[0] == 100.0  # health
+
 
 @pytest.mark.unit
 @pytest.mark.observation
@@ -53,38 +59,41 @@ def test_build_observation_with_champions():
     builder = ObservationBuilder()
     pool = MockPool()
     player = Player(pool, 0)
-    
-    # Add a champion to the board
-    # board is list of 7 encoded_list(4, encode_champ_object)
-    # let's put 'aatrox' at (0, 0)
-    aatrox = MockChampion('aatrox', stars=2, chosen=False)
+
+    aatrox = MockChampion('aatrox', stars=2, chosen=False, origin=['cultist', 'vanguard'])
     player.board[0][0] = aatrox
-    
-    # Add a champion to the bench
-    ahri = MockChampion('ahri', stars=1, chosen=True)
+
+    ahri = MockChampion('ahri', stars=1, chosen=True, origin=['spirit', 'mage'])
     player.bench[0] = ahri
-    
+
     obs = builder.build_observation("player_0", player)
-    
-    # Verify board champions
-    board_champ_slice = builder.current_player_schema.get_field_slice("board_champions")
-    board_champs = obs["tensor"][board_champ_slice].reshape((58, 4, 7))
-    
-    # aatrox index in COST
+
+    # Verify board field
+    board_slice = builder.current_player_schema.get_field_slice("board")
+    board = obs["tensor"][board_slice].reshape((28, 122))
+
+    # aatrox at slot 0 (x=0, y=0)
+    aatrox_slot = board[0]
+    # First 32 dims should be the champion index
     aatrox_idx = list(COST.keys()).index('aatrox') - 1
-    assert board_champs[aatrox_idx, 0, 0] == 1.0
-    
-    # Verify board stars
-    board_star_slice = builder.current_player_schema.get_field_slice("board_stars")
-    board_stars = obs["tensor"][board_star_slice].reshape((1, 4, 7))
-    assert board_stars[0, 0, 0] == 2.0
-    
-    # Verify bench (1D counts per champion type)
-    bench_champ_slice = builder.current_player_schema.get_field_slice("bench_champions")
-    bench_champs = obs["tensor"][bench_champ_slice]
+    assert aatrox_slot[0] == aatrox_idx
+
+    # Star level at index 120
+    assert aatrox_slot[120] == 2.0
+
+    # Chosen flag at index 121
+    assert aatrox_slot[121] == 0.0
+
+    # Verify bench_champions field
+    bench_slice = builder.current_player_schema.get_field_slice("bench_champions")
+    bench = obs["tensor"][bench_slice].reshape((9, 122))
+
+    ahri_slot = bench[0]
     ahri_idx = list(COST.keys()).index('ahri') - 1
-    # ahri is on bench[0], bench count = 1
-    assert bench_champs[ahri_idx] == 1.0
+    assert ahri_slot[0] == ahri_idx
+    assert ahri_slot[120] == 1.0  # star level
+    assert ahri_slot[121] == 1.0  # chosen flag
+
 
 @pytest.mark.unit
 @pytest.mark.observation
@@ -92,23 +101,21 @@ def test_full_board_and_bench():
     builder = ObservationBuilder()
     pool = MockPool()
     player = Player(pool, 0)
-    
-    # Fill board
-    champions = list(COST.keys())[1:29] # Get 28 champion names
+
+    champions = list(COST.keys())[1:29]
     for i in range(7):
         for j in range(4):
             idx = i * 4 + j
-            player.board[i][j] = MockChampion(champions[idx], stars=(idx % 3) + 1)
-            
-    # Fill bench
-    bench_champs = list(COST.keys())[29:38] # Get 9 more
+            player.board[i][j] = MockChampion(champions[idx], stars=(idx % 3) + 1, origin=['cultist'])
+
+    bench_champs = list(COST.keys())[29:38]
     for i in range(9):
         player.bench[i] = MockChampion(bench_champs[i])
-        
+
     obs = builder.build_observation("player_0", player)
-    
+
     assert obs["tensor"].shape == (builder.current_player_schema.total_size,)
-    # Just ensure no errors occurred during building
+
 
 @pytest.mark.unit
 @pytest.mark.observation
@@ -116,39 +123,45 @@ def test_shop_vector():
     builder = ObservationBuilder()
     pool = MockPool()
     player = Player(pool, 0)
-    
-    # Create a mock shop vector (59,): [0:58] champion counts, [58] chosen index
-    shop_vector = np.random.rand(59)
-    
+
+    # Create mock shop vector
+    shop_vector = np.zeros(59)
+    # Put aatrox in shop slot 0
+    aatrox_idx = list(COST.keys()).index('aatrox') - 1
+    player.shop_elems = np.array([aatrox_idx, -1, -1, -1, -1])
+    shop_vector[58] = 0.0  # chosen index
+
     obs = builder.build_observation("player_0", player, shop_vector=shop_vector)
-    
-    shop_champ_slice = builder.current_player_schema.get_field_slice("shop_champions")
-    shop_champs = obs["tensor"][shop_champ_slice]
-    assert np.allclose(shop_champs, shop_vector[0:58])
-    
+
+    shop_slice = builder.current_player_schema.get_field_slice("shop")
+    shop = obs["tensor"][shop_slice].reshape((5, 32))
+    assert shop[0, 0] == aatrox_idx
+
     shop_chosen_slice = builder.current_player_schema.get_field_slice("shop_chosen")
     shop_chosen = obs["tensor"][shop_chosen_slice]
-    assert np.allclose(shop_chosen, shop_vector[58:59])
+    assert shop_chosen[0] == 0.0
+
 
 @pytest.mark.unit
 @pytest.mark.observation
 def test_get_set_field():
     builder = ObservationBuilder()
     obs = np.zeros(builder.current_player_schema.total_size)
-    
-    # Test setting and getting gold
-    gold_val = np.ones((1,)) * 50
-    obs = builder.set_field_in_observation(obs, "gold", gold_val)
-    
-    retrieved_gold = builder.get_field_from_observation(obs, "gold")
-    assert np.allclose(retrieved_gold, gold_val)
-    
-    # Test setting and getting board champions
-    board_champs_val = np.random.rand(58, 4, 7)
-    obs = builder.set_field_in_observation(obs, "board_champions", board_champs_val)
-    
-    retrieved_board = builder.get_field_from_observation(obs, "board_champions")
-    assert np.allclose(retrieved_board, board_champs_val)
+
+    # Test setting and getting player_state
+    gold_val = np.ones((7,)) * 50
+    obs = builder.set_field_in_observation(obs, "player_state", gold_val)
+
+    retrieved = builder.get_field_from_observation(obs, "player_state")
+    assert np.allclose(retrieved, gold_val)
+
+    # Test setting and getting board
+    board_val = np.random.rand(28, 122)
+    obs = builder.set_field_in_observation(obs, "board", board_val)
+
+    retrieved_board = builder.get_field_from_observation(obs, "board")
+    assert np.allclose(retrieved_board, board_val)
+
 
 @pytest.mark.unit
 @pytest.mark.observation
@@ -156,16 +169,15 @@ def test_edge_case_unrecognized_champion():
     builder = ObservationBuilder()
     pool = MockPool()
     player = Player(pool, 0)
-    
+
     player.board = "not a list of encoded_lists"
-    
-    # This should trigger the try-except in _build_tensor_observation and print a warning
-    # but still return an observation (though board fields will be zero)
+
     obs = builder.build_observation("player_0", player)
     assert "tensor" in obs
-    
-    board_champ_slice = builder.current_player_schema.get_field_slice("board_champions")
-    assert np.all(obs["tensor"][board_champ_slice] == 0)
+
+    board_slice = builder.current_player_schema.get_field_slice("board")
+    assert np.all(obs["tensor"][board_slice] == 0)
+
 
 @pytest.mark.unit
 @pytest.mark.observation
@@ -173,16 +185,15 @@ def test_action_mask():
     builder = ObservationBuilder()
     pool = MockPool()
     player = Player(pool, 0)
-    
+
     player.shop_mask = np.array([1, 0, 1, 0, 1], dtype=np.int8)
-    
+
     obs = builder.build_observation("player_0", player)
-    
+
     assert "action_mask" in obs
-    # action_mask schema is (54,)
-    # first 5 should match shop_mask
     assert np.array_equal(obs["action_mask"][:5], player.shop_mask)
-    assert np.all(obs["action_mask"][5:] == 1) # default is 1
+    assert np.all(obs["action_mask"][5:] == 1)
+
 
 @pytest.mark.unit
 @pytest.mark.observation
@@ -191,24 +202,25 @@ def test_observation_manager_mixin():
         def __init__(self):
             super().__init__()
             self.gold = 10
-            
+
         def get_observation_for_field(self, field_name):
-            if field_name == "gold":
-                return np.ones((1,)) * self.gold
-            return np.zeros((1,))
+            if field_name == "player_state":
+                return np.ones((7,)) * self.gold
+            return np.zeros((7,))
 
     player = TestPlayer()
     assert hasattr(player, "_obs_builder")
     assert isinstance(player._obs_builder, ObservationBuilder)
-    
-    gold_obs = player.get_observation_for_field("gold")
-    assert np.all(gold_obs == 10)
-    
+
+    state_obs = player.get_observation_for_field("player_state")
+    assert np.all(state_obs == 10)
+
     with pytest.raises(NotImplementedError):
         class IncompletePlayer(ObservationManagerMixin):
             pass
         p = IncompletePlayer()
-        p.get_observation_for_field("gold")
+        p.get_observation_for_field("player_state")
+
 
 @pytest.mark.unit
 @pytest.mark.observation
@@ -216,24 +228,144 @@ def test_convenience_functions():
     from TFTSet4Gym.tft_set4_gym.observation_builder import build_observation, get_field_slice as obs_get_field_slice, \
         get_field_value_from_obs, set_field_value_in_obs, update_config_observation_size
     from TFTSet4Gym.tft_set4_gym import config
-    
+
     pool = MockPool()
     player = Player(pool, 0)
     obs_dict = build_observation("player_0", player)
     assert "tensor" in obs_dict
-    
-    s = obs_get_field_slice("gold")
+
+    s = obs_get_field_slice("player_state")
     assert isinstance(s, slice)
-    
-    # Test update_config_observation_size
+
     original_size = config.OBSERVATION_SIZE
     new_size = update_config_observation_size()
     assert new_size > 0
     assert config.OBSERVATION_SIZE == new_size
-    
-    # Test get/set convenience
+
     obs = obs_dict["tensor"]
-    gold_val = np.ones((1,)) * 75
-    obs = set_field_value_in_obs(obs, "gold", gold_val)
-    retrieved = get_field_value_from_obs(obs, "gold")
+    gold_val = np.ones((7,)) * 75
+    obs = set_field_value_in_obs(obs, "player_state", gold_val)
+    retrieved = get_field_value_from_obs(obs, "player_state")
     assert np.allclose(retrieved, gold_val)
+
+
+@pytest.mark.unit
+@pytest.mark.observation
+def test_schema_total_size():
+    """Verify the total observation size matches the spec.
+
+    The spec lists 28,946 total which includes the action_mask (54 dims).
+    The current_player schema alone is 28,892.
+    """
+    builder = ObservationBuilder()
+    current_player_size = 28892
+    action_mask_size = 54
+    expected_total = current_player_size + action_mask_size
+
+    assert builder.current_player_schema.total_size == current_player_size
+    assert builder.action_mask_schema.total_size == action_mask_size
+    assert builder.current_player_schema.total_size + builder.action_mask_schema.total_size == expected_total
+
+
+@pytest.mark.unit
+@pytest.mark.observation
+def test_bench_items():
+    """Test bench items encoding."""
+    builder = ObservationBuilder()
+    pool = MockPool()
+    player = Player(pool, 0)
+
+    # Add items to item bench
+    player.item_bench[0] = 'bloodthirster'
+    player.item_bench[1] = 'bf_sword'
+
+    obs = builder.build_observation("player_0", player)
+
+    bench_items_slice = builder.current_player_schema.get_field_slice("bench_items")
+    bench_items = obs["tensor"][bench_items_slice].reshape((10, 24))
+
+    # First slot should have bloodthirster index
+    from TFTSet4Gym.tft_set4_gym.item_stats import item_builds, uncraftable_items
+    expected_idx = len(uncraftable_items) + list(item_builds.keys()).index('bloodthirster')
+    assert bench_items[0, 0] == expected_idx
+
+
+@pytest.mark.unit
+@pytest.mark.observation
+def test_team_traits():
+    """Test team traits encoding."""
+    builder = ObservationBuilder()
+    pool = MockPool()
+    player = Player(pool, 0)
+
+    player.team_tiers = {'assassin': 2, 'mage': 1}
+    player.team_composition = {'assassin': 3, 'mage': 2}
+
+    obs = builder.build_observation("player_0", player)
+
+    team_traits_slice = builder.current_player_schema.get_field_slice("team_traits")
+    team_traits = obs["tensor"][team_traits_slice]
+
+    # assassin is at index 11 in TRAIT_LIST, tier 2 of max 3 = 0.667
+    assassin_idx = 11
+    assert abs(team_traits[assassin_idx] - 2.0/3.0) < 0.01
+
+
+@pytest.mark.unit
+@pytest.mark.observation
+def test_opponent_boards():
+    """Test opponent board building."""
+    builder = ObservationBuilder()
+    pool = MockPool()
+
+    # Create current player
+    player = Player(pool, 0)
+    player.board = [encoded_list(4, lambda x: None) for _ in range(7)]
+
+    # Create opponent
+    opp = Player(pool, 1)
+    opp.board = [encoded_list(4, lambda x: None) for _ in range(7)]
+    opp.board[0][0] = MockChampion('aatrox', stars=2, origin=['cultist', 'vanguard'])
+    opp.health = 80
+    opp.gold = 15
+    opp.level = 3
+    opp.win_streak = 2
+
+    players = {"player_0": player, "player_1": opp}
+
+    obs_dict = builder.build_full_observation("player_0", player, players)
+    obs = obs_dict["tensor"]
+
+    opp_board_slice = builder.current_player_schema.get_field_slice("opponent_boards")
+    opp_board = obs[opp_board_slice].reshape((7, 28, 122))
+
+    # Opponent at index 0 should have aatrox at slot 0
+    assert opp_board[0, 0, 0] == list(COST.keys()).index('aatrox') - 1
+
+    opp_info_slice = builder.current_player_schema.get_field_slice("opponent_info")
+    opp_info = obs[opp_info_slice].reshape((7, 4))
+
+    assert opp_info[0, 0] == 80.0  # health
+    assert opp_info[0, 1] == 15.0  # gold
+    assert opp_info[0, 2] == 3.0   # level
+    assert opp_info[0, 3] == 2.0   # streak
+
+
+@pytest.mark.unit
+@pytest.mark.observation
+def test_empty_slot_handling():
+    """Test that empty board/bench slots produce zero vectors."""
+    builder = ObservationBuilder()
+    pool = MockPool()
+    player = Player(pool, 0)
+
+    # Leave board and bench empty
+    obs = builder.build_observation("player_0", player)
+
+    board_slice = builder.current_player_schema.get_field_slice("board")
+    board = obs["tensor"][board_slice].reshape((28, 122))
+    assert np.all(board == 0)
+
+    bench_slice = builder.current_player_schema.get_field_slice("bench_champions")
+    bench = obs["tensor"][bench_slice].reshape((9, 122))
+    assert np.all(bench == 0)
