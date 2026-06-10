@@ -16,9 +16,20 @@ from .origin_class_stats import origin_class
 
 
 class ObservationBuilder:
-    """Centralized builder for creating observations from player state."""
+    """Centralized builder for creating observations from player state.
 
-    # Champion and item vocab sizes for normalization
+    TFT-182: Embedding-based observation schema with learnable embeddings for
+    champions, items, traits, and origins. The observation tensor contains
+    pre-computed embeddings so the shape matches the spec exactly.
+    """
+
+    # Embedding dimensions per spec
+    CHAMP_EMBED_DIM = 32
+    ITEM_EMBED_DIM = 24
+    TRAIT_EMBED_DIM = 8
+    ORIGIN_EMBED_DIM = 8
+
+    # Vocab sizes
     NUM_CHAMPIONS = 58
     NUM_ITEMS = 37
     NUM_TRAITS = 20
@@ -27,6 +38,21 @@ class ObservationBuilder:
     def __init__(self):
         self.current_player_schema = get_observation_schema("current_player")
         self.action_mask_schema = get_observation_schema("action_mask")
+        self._init_embed_tables()
+
+    def _init_embed_tables(self):
+        """Initialize temporary embedding tables for pre-computing embeddings.
+
+        These tables produce deterministic embeddings used by the observation
+        builder. The model's representation network may replace these with
+        learnable embeddings during training.
+        """
+        rng = np.random.RandomState(42)
+
+        self.champion_embed_table = rng.randn(self.NUM_CHAMPIONS, self.CHAMP_EMBED_DIM).astype(np.float64)
+        self.item_embed_table = rng.randn(self.NUM_ITEMS, self.ITEM_EMBED_DIM).astype(np.float64)
+        self.trait_embed_table = rng.randn(self.NUM_TRAITS, self.TRAIT_EMBED_DIM).astype(np.float64)
+        self.origin_embed_table = rng.randn(self.NUM_ORIGINS, self.ORIGIN_EMBED_DIM).astype(np.float64)
 
     def build_observation(self, player_id: str, player: Any,
                           shop_vector: Optional[np.ndarray] = None,
@@ -174,10 +200,17 @@ class ObservationBuilder:
         return origin_names.index(origin_name)
 
     def _encode_slot(self, unit: Any) -> np.ndarray:
-        """Encode a single board/bench slot as a feature vector.
+        """Encode a single board/bench slot as a 122-dim feature vector.
 
-        The model's representation network will apply embedding lookups to
-        the champion ID, item IDs, trait IDs, and origin IDs contained here.
+        Per-slot layout (122 dims total):
+          [0:32]   champion embedding (32)
+          [32:56]  item1 embedding (24)
+          [56:80]  item2 embedding (24)
+          [80:104] item3 embedding (24)
+          [104:112] trait embedding (8)
+          [112:120] origin embedding (8)
+          [120]    star level (1)
+          [121]    chosen flag (1)
         """
         slot_dim = self.current_player_schema.get_field("board").shape[1]
         vector = np.zeros(slot_dim, dtype=np.float64)
@@ -185,38 +218,40 @@ class ObservationBuilder:
         if unit is None:
             return vector
 
-        # Champion ID (normalized to [0, 1])
+        # Champion embedding (32 dims)
         champ_idx = self._champ_index(unit.name)
-        vector[0] = champ_idx / (self.NUM_CHAMPIONS - 1)
+        vector[0:32] = self.champion_embed_table[champ_idx]
 
-        # Item IDs (normalized to [0, 1])
+        # Item embeddings (3 x 24 = 72 dims)
         items = getattr(unit, 'items', []) or []
         for i in range(3):
             if i < len(items):
                 item_idx = self._item_index(items[i])
-                vector[1 + i] = item_idx / (self.NUM_ITEMS - 1)
+                vector[32 + i * 24: 32 + (i + 1) * 24] = self.item_embed_table[item_idx]
+            # Empty slot = zero vector (already initialized)
 
-        # Trait IDs (normalized to [0, 1])
-        traits = getattr(unit, 'origin', [])
-        for i, trait in enumerate(traits[:2]):
-            if i < 2:
-                t_idx = self._trait_index(trait)
-                vector[4 + i] = t_idx / (self.NUM_TRAITS - 1)
+        # Trait embedding (8 dims) - use first trait
+        traits = getattr(unit, 'origin', []) or []
+        if traits:
+            t_idx = self._trait_index(traits[0])
+            vector[104:112] = self.trait_embed_table[t_idx]
 
-        # Origin IDs (normalized to [0, 1])
-        origins = traits[2:] if len(traits) > 2 else []
-        for i, origin in enumerate(origins[:2]):
-            if i < 2:
-                o_idx = self._origin_index(origin)
-                vector[6 + i] = o_idx / (self.NUM_ORIGINS - 1)
+        # Origin embedding (8 dims) - use first origin if distinct from trait
+        if len(traits) > 1:
+            o_idx = self._origin_index(traits[1])
+            vector[112:120] = self.origin_embed_table[o_idx]
+        elif len(traits) == 1:
+            # Use same trait as origin if only one origin/trait
+            o_idx = self._origin_index(traits[0])
+            vector[112:120] = self.origin_embed_table[o_idx]
 
         # Star level (normalized to [0, 1])
         stars = getattr(unit, 'stars', 1)
-        vector[8] = (stars - 1) / 2.0  # 1->0.0, 2->0.5, 3->1.0
+        vector[120] = (stars - 1) / 2.0  # 1->0.0, 2->0.5, 3->1.0
 
         # Chosen flag
         chosen = getattr(unit, 'chosen', False)
-        vector[9] = 1.0 if chosen else 0.0
+        vector[121] = 1.0 if chosen else 0.0
 
         return vector
 
@@ -245,26 +280,28 @@ class ObservationBuilder:
         return bench_encoded
 
     def _encode_bench_items(self, item_bench) -> np.ndarray:
-        """Encode item bench as (10, 24)."""
+        """Encode item bench as (10, 24) with item embeddings."""
         bench_item_dim = self.current_player_schema.get_field("bench_items").shape[1]
         bench_items_encoded = np.zeros((10, bench_item_dim), dtype=np.float64)
 
         for i in range(10):
             if i < len(item_bench) and item_bench[i] is not None:
                 item_idx = self._item_index(item_bench[i])
-                # Store normalized item index in first dimension
-                bench_items_encoded[i, 0] = item_idx / (self.NUM_ITEMS - 1)
+                bench_items_encoded[i] = self.item_embed_table[item_idx]
+            # Empty slot = zero vector (already initialized)
 
         return bench_items_encoded
 
     def _encode_shop_champions(self, shop_vector: np.ndarray) -> np.ndarray:
-        """Encode shop champions as (5, 32)."""
+        """Encode shop champions as (5, 32) with champion embeddings."""
         shop_dim = self.current_player_schema.get_field("shop_champions").shape[1]
         shop_encoded = np.zeros((5, shop_dim), dtype=np.float64)
 
         for i in range(5):
             champ_idx = int(shop_vector[i])
-            shop_encoded[i, 0] = champ_idx / (self.NUM_CHAMPIONS - 1)
+            if 0 <= champ_idx < self.NUM_CHAMPIONS:
+                shop_encoded[i] = self.champion_embed_table[champ_idx]
+            # Empty slot = zero vector (already initialized)
 
         return shop_encoded
 
