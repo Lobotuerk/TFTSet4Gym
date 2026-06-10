@@ -3,6 +3,7 @@ import numpy as np
 from TFTSet4Gym.tft_set4_gym.observation_builder import ObservationBuilder, ObservationManagerMixin
 from TFTSet4Gym.tft_set4_gym.player import Player, encoded_list
 from TFTSet4Gym.tft_set4_gym.stats import COST
+from TFTSet4Gym.tft_set4_gym.observation_builder import COST_INDEX, ITEM_BUILD_INDEX
 from unittest.mock import MagicMock
 
 
@@ -75,7 +76,7 @@ def test_build_observation_with_champions():
     # aatrox at slot 0 (x=0, y=0)
     aatrox_slot = board[0]
     # First 32 dims should be the champion index
-    aatrox_idx = list(COST.keys()).index('aatrox') - 1
+    aatrox_idx = COST_INDEX["aatrox"] - 1
     assert aatrox_slot[0] == aatrox_idx
 
     # Star level at index 120
@@ -89,7 +90,7 @@ def test_build_observation_with_champions():
     bench = obs["tensor"][bench_slice].reshape((9, 122))
 
     ahri_slot = bench[0]
-    ahri_idx = list(COST.keys()).index('ahri') - 1
+    ahri_idx = COST_INDEX["ahri"] - 1
     assert ahri_slot[0] == ahri_idx
     assert ahri_slot[120] == 1.0  # star level
     assert ahri_slot[121] == 1.0  # chosen flag
@@ -127,7 +128,7 @@ def test_shop_vector():
     # Create mock shop vector
     shop_vector = np.zeros(59)
     # Put aatrox in shop slot 0
-    aatrox_idx = list(COST.keys()).index('aatrox') - 1
+    aatrox_idx = COST_INDEX["aatrox"] - 1
     player.shop_elems = np.array([aatrox_idx, -1, -1, -1, -1])
     shop_vector[58] = 0.0  # chosen index
 
@@ -286,7 +287,7 @@ def test_bench_items():
 
     # First slot should have bloodthirster index
     from TFTSet4Gym.tft_set4_gym.item_stats import item_builds, uncraftable_items
-    expected_idx = len(uncraftable_items) + list(item_builds.keys()).index('bloodthirster')
+    expected_idx = len(uncraftable_items) + ITEM_BUILD_INDEX['bloodthirster']
     assert bench_items[0, 0] == expected_idx
 
 
@@ -340,7 +341,7 @@ def test_opponent_boards():
     opp_board = obs[opp_board_slice].reshape((7, 28, 122))
 
     # Opponent at index 0 should have aatrox at slot 0
-    assert opp_board[0, 0, 0] == list(COST.keys()).index('aatrox') - 1
+    assert opp_board[0, 0, 0] == COST_INDEX["aatrox"] - 1
 
     opp_info_slice = builder.current_player_schema.get_field_slice("opponent_info")
     opp_info = obs[opp_info_slice].reshape((7, 4))

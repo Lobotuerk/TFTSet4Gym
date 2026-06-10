@@ -12,6 +12,11 @@ from .stats import COST
 from .item_stats import item_builds, uncraftable_items, basic_items
 from .origin_class_stats import tiers as trait_tiers
 
+# O(1) inverted indexes
+COST_INDEX = {name: idx for idx, name in enumerate(COST)}
+ITEM_BUILD_INDEX = {name: idx for idx, name in enumerate(item_builds)}
+UNCRAFTABLE_INDEX = {name: idx for idx, name in enumerate(uncraftable_items)}
+
 # Trait and origin lists in the order used by the schema
 TRAIT_LIST = [
     'cultist', 'divine', 'dusk', 'elderwood', 'enlightened',
@@ -25,28 +30,27 @@ ORIGIN_LIST = [
     'tormented', 'cultist', 'divine', 'dusk', 'elderwood',
 ]
 
+TRAIT_INDEX = {name: idx for idx, name in enumerate(TRAIT_LIST)}
+ORIGIN_INDEX = {name: idx for idx, name in enumerate(ORIGIN_LIST)}
+
 
 def _get_item_index(item_name: str) -> int:
     """Get the embedding index for an item name."""
-    if item_name in item_builds:
-        return list(item_builds.keys()).index(item_name) + len(uncraftable_items)
-    elif item_name in uncraftable_items:
-        return list(uncraftable_items).index(item_name)
+    if item_name in ITEM_BUILD_INDEX:
+        return ITEM_BUILD_INDEX[item_name] + len(uncraftable_items)
+    elif item_name in UNCRAFTABLE_INDEX:
+        return UNCRAFTABLE_INDEX[item_name]
     return 0
 
 
 def _get_trait_index(trait_name: str) -> int:
     """Get the embedding index for a trait name."""
-    if trait_name in TRAIT_LIST:
-        return TRAIT_LIST.index(trait_name)
-    return 0
+    return TRAIT_INDEX.get(trait_name, 0)
 
 
 def _get_origin_index(origin_name: str) -> int:
     """Get the embedding index for an origin name."""
-    if origin_name in ORIGIN_LIST:
-        return ORIGIN_LIST.index(origin_name)
-    return 0
+    return ORIGIN_INDEX.get(origin_name, 0)
 
 
 class ObservationBuilder:
@@ -132,9 +136,9 @@ class ObservationBuilder:
         """Get 0-based champion index for embedding lookup."""
         try:
             name = getattr(champ, 'name', None)
-            if name is None or name not in COST:
+            if name is None or name not in COST_INDEX:
                 return -1
-            return list(COST.keys()).index(name) - 1
+            return COST_INDEX[name] - 1
         except (ValueError, AttributeError):
             return -1
 

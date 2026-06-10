@@ -2,7 +2,10 @@ import collections
 import numpy as np
 from . import config
 from .stats import COST
-from .origin_class import team_traits, game_comp_tiers
+
+# O(1) inverted index: champion name -> list index
+COST_INDEX = {name: idx for idx, name in enumerate(COST)}
+from .origin_class import team_traits
 from . import utils as utils
 from .observation_schema import get_observation_schema, OBSERVATION_REGISTRY
 from .observation_builder import ObservationBuilder
@@ -16,11 +19,6 @@ class Observation:
     def __init__(self):
         # Enhanced observation system with schema integration
         self.builder = ObservationBuilder()
-        
-        # Legacy attributes for backward compatibility
-        self.shop_vector = None
-        self.shop_mask = np.ones(5, dtype=np.int8)
-        self.game_comp_vector = np.zeros(208)
         
         # Use schema to determine observation size
         schema = get_observation_schema("current_player")
@@ -48,7 +46,7 @@ class Observation:
         Maintains backward compatibility with existing interface.
         """
         # Build the main observation using the schema
-        obs_dict = self.builder.build_observation(player_id, player, self.shop_vector)
+        obs_dict = self.builder.build_observation(player_id, player)
         
         # Handle time-stepped observations (existing logic)
         game_state_tensor = obs_dict["tensor"]
@@ -89,24 +87,6 @@ class Observation:
             observation = self.dummy_observation
         return self.builder.set_field_in_observation(observation, field_name, value)
 
-    """
-    Description - Generates the other players observation from the perspective of the current player.
-                  This is the same as looking at each other board individually in a game.
-    Inputs      - cur_player: Player object
-                    Player whose perspective it is from
-                  players: List of Player objects
-                    All players in the game.
-    """
-    def generate_other_player_vectors(self, cur_player, players):
-        for player_id in players:
-            other_player = players[player_id]
-            if other_player != cur_player:
-                other_player_vector = np.zeros((26, 6, 10))
-                if other_player:
-                    other_player_vector = other_player.player_public_vector
-                self.other_player_observations[player_id] = other_player_vector
-        self.turn_since_update = 0
-
     def build_full_observation(self, player_id: str, player, players: dict,
                                 shop_vector=None) -> dict:
         """Build observation including opponent data using the new schema.
@@ -115,21 +95,6 @@ class Observation:
         includes opponent_boards and opponent_info fields.
         """
         return self.builder.build_full_observation(player_id, player, players, shop_vector)
-
-    """
-    Description - Generates the vector for a comp tier for a given player. This is equal to the game compositions bar 
-                  on the left in TFT. 
-    """
-    # TODO: Add other player's compositions to the list of other player's vectors.
-    def generate_game_comps_vector(self):
-        output = np.zeros(208)
-        for i in range(len(game_comp_tiers)):
-            tiers = np.array(list(game_comp_tiers[i].values()))
-            tierMax = np.max(tiers)
-            if tierMax != 0:
-                tiers = tiers / tierMax
-            output[i * 26: i * 26 + 26] = tiers
-        self.game_comp_vector = output
 
     '''
     Description - Generates the shop vector and information for the shop mask. This is a binary encoding of the champ
@@ -140,14 +105,12 @@ class Observation:
                     player who the shop belongs to.
     '''
     def generate_shop_vector(self, shop, player):
-        # 1D vector: [0:58] champion counts, [58] chosen champion index
-        output_array = np.zeros(59)
         shop_chosen = False
         chosen_shop_index = -1
         chosen_shop = ''
         shop_costs = np.zeros((5, 1))
-        shop_counts = np.zeros((58,1))
         shop_elems = np.zeros((5, 1))
+        shop_mask = np.ones(5, dtype=np.int8)
         for x in range(0, len(shop)):
             if shop[x] != " ":
                 chosen = 0
@@ -164,16 +127,15 @@ class Observation:
                         shop_costs[x] = 3 * COST[shop[x]] - 1
                 else:
                     shop_costs[x] = COST[shop[x]]
-                c_index = list(COST.keys()).index(shop[x])
+                c_index = COST_INDEX[shop[x]]
                 shop_elems[x] = c_index-1
-                shop_counts[c_index-1] += 1
-                self.shop_mask[x] = 1
+                shop_mask[x] = 1
             else:
                 shop_elems[x] = -1
-                self.shop_mask[x] = 0
+                shop_mask[x] = 0
 
             # Input chosen mechanics once I go back and update the chosen mechanics.
-            self.shop_mask[x] = 0
+            shop_mask[x] = 0
         if shop_chosen:
             # if shop_chosen == 'the':
             #     shop_chosen = 'the_boss'
@@ -192,16 +154,14 @@ class Observation:
 
         for idx, cost in enumerate(player.shop_costs):
             if player.gold < cost or cost == 0:
-                self.shop_mask[idx] = 0
+                shop_mask[idx] = 0
             elif player.gold >= cost:
-                self.shop_mask[idx] = 1
+                shop_mask[idx] = 1
 
         if player.bench_full():
-            self.shop_mask = np.zeros(5)
+            shop_mask = np.zeros(5, dtype=np.int8)
 
-        output_array[:58] = shop_counts.flatten()
         if chosen_shop != '':
-            output_array[58] = list(COST.keys()).index(chosen_shop.split('_')[0]) - 1
+            pass  # chosen index no longer needed; builder reads player.shop_elems directly
 
-        self.shop_vector = output_array
-        player.shop_mask = self.shop_mask
+        player.shop_mask = shop_mask
