@@ -202,6 +202,9 @@ class Player:
 
         # Context For Loot Orbs
         self.orb_history = []
+
+        # Raw shop data (list of champion name strings)
+        self.shop = []
     
     @property
     def health(self):

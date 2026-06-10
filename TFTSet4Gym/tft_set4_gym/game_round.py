@@ -240,7 +240,6 @@ class Game_Round:
 
     def start_round(self):
         self.step_func_obj.generate_shops(self.PLAYERS)
-        self.step_func_obj.generate_shop_vectors(self.PLAYERS)
         self.decide_player_combat()
         for player in self.PLAYERS.values():
             if player:
