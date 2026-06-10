@@ -213,7 +213,7 @@ class TFT_Simulator(ParallelEnv):
             self.PLAYERS[agent].turns_for_combat = config.ACTIONS_PER_TURN
 
         self.observations = {agent: self.game_observations[agent].observation(
-            agent, self.PLAYERS[agent]) for agent in self.agents}
+            agent, self.PLAYERS[agent], players=self.PLAYERS) for agent in self.agents}
 
         return self.observations, self.infos
 
@@ -321,7 +321,7 @@ class TFT_Simulator(ParallelEnv):
             if agent in self.PLAYERS and self.PLAYERS[agent]:
                 self.PLAYERS[agent].turns_for_combat = config.ACTIONS_PER_TURN - self.actions_taken
                 self.observations[agent] = self.game_observations[agent].observation(
-                    agent, self.PLAYERS[agent])
+                    agent, self.PLAYERS[agent], players=self.PLAYERS)
                 # Add player-specific rewards accumulated during step/round
                 self.rewards[agent] += self.PLAYERS[agent].reward
                 # Reset the reward in the player object so it's not double-counted next step

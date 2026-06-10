@@ -14,7 +14,8 @@ LOG_COMBAT = False
 DEBUG = False
 
 # Observation size - will be updated by schema system
-OBSERVATION_SIZE = 1804  # Default, updated dynamically by schema
+# New schema with embeddings: 28,892 dims (tensor) + 54 dims (action_mask)
+OBSERVATION_SIZE = 28892  # Updated dynamically by schema
 OBSERVATION_TIME_STEPS = 1
 OBSERVATION_TIME_STEP_INTERVAL = 1
 ACTION_DIM = [7, 37, 10]
