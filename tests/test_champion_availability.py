@@ -3,17 +3,10 @@ import numpy as np
 from TFTSet4Gym.tft_set4_gym.champion_availability import (
     encode_champion_availability,
     NUM_CHAMPIONS,
-    BOARD_CHAMPIONS_ELEMS, BOARD_STARS_ELEMS, BOARD_CHOSEN_ELEMS, BENCH_CHAMPIONS_ELEMS,
-    BOARD_CHAMPIONS_START, BOARD_STARS_START, BOARD_CHOSEN_START, BENCH_CHAMPIONS_START, FIRST_3304_SIZE,
 )
 from TFTSet4Gym.tft_set4_gym.stats import COST
-from TFTSet4Gym.tft_set4_gym.observation_builder import ObservationBuilder
+from TFTSet4Gym.tft_set4_gym.observation_builder import ObservationBuilder, COST_INDEX
 from TFTSet4Gym.tft_set4_gym.player import Player
-from TFTSet4Gym.tft_set4_gym import config
-from TFTSet4Gym.tft_set4_gym.observation_schema import update_observation_size_in_config
-
-
-update_observation_size_in_config()
 
 
 class MockPool:
@@ -24,26 +17,34 @@ class MockPool:
 
 
 class MockChampion:
-    def __init__(self, name, stars=1, chosen=False):
+    def __init__(self, name, stars=1, chosen=False, items=None, origin=None):
         self.name = name
         self.stars = stars
         self.chosen = chosen
+        self.items = items or []
+        self.origin = origin or []
 
 
 def get_champion_index(champ_name: str) -> int:
-    return list(COST.keys()).index(champ_name) - 1
+    return COST_INDEX[champ_name] - 1
 
 
 def test_output_shape():
-    obs = np.zeros(config.OBSERVATION_SIZE)
-    result = encode_champion_availability(obs)
+    builder = ObservationBuilder()
+    pool = MockPool()
+    player = Player(pool, 0)
+    obs_dict = builder.build_observation("player_0", player)
+    result = encode_champion_availability(obs_dict["tensor"])
     assert result.shape == (2 * NUM_CHAMPIONS,)
     assert result.shape == (116,)
 
 
 def test_empty_observation():
-    obs = np.zeros(config.OBSERVATION_SIZE)
-    result = encode_champion_availability(obs)
+    builder = ObservationBuilder()
+    pool = MockPool()
+    player = Player(pool, 0)
+    obs_dict = builder.build_observation("player_0", player)
+    result = encode_champion_availability(obs_dict["tensor"])
     assert np.all(result == 0.0)
 
 
@@ -185,20 +186,6 @@ def test_full_board_takes_max_level():
 
     diana_idx = get_champion_index('diana')
     assert result[diana_idx] == pytest.approx(2.0 / 3.0)
-
-
-def test_accepts_first_3304_features_directly():
-    obs_3304 = np.zeros(FIRST_3304_SIZE)
-    aatrox_idx = get_champion_index('aatrox')
-
-    board_champions = obs_3304[BOARD_CHAMPIONS_START:BOARD_CHAMPIONS_START + BOARD_CHAMPIONS_ELEMS].reshape(58, 4, 7)
-    board_champions[aatrox_idx, 0, 0] = 1.0
-
-    board_stars = obs_3304[BOARD_STARS_START:BOARD_STARS_START + BOARD_STARS_ELEMS].reshape(1, 4, 7)
-    board_stars[0, 0, 0] = 3.0
-
-    result = encode_champion_availability(obs_3304)
-    assert result[aatrox_idx] == pytest.approx(1.0)
 
 
 def test_chosen_flag_on_board():
