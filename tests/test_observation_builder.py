@@ -119,19 +119,16 @@ def test_full_board_and_bench():
 
 @pytest.mark.unit
 @pytest.mark.observation
-def test_shop_vector():
+def test_shop():
     builder = ObservationBuilder()
     pool = MockPool()
     player = Player(pool, 0)
 
-    # Create mock shop vector
-    shop_vector = np.zeros(59)
-    # Put aatrox in shop slot 0
+    # Set shop with champion name strings (as pool.sample() returns)
     aatrox_idx = list(COST.keys()).index('aatrox') - 1
-    player.shop_elems = np.array([aatrox_idx, -1, -1, -1, -1])
-    shop_vector[58] = 0.0  # chosen index
+    player.shop = ['aatrox', ' ', ' ', ' ', ' ']
 
-    obs = builder.build_observation("player_0", player, shop_vector=shop_vector)
+    obs = builder.build_observation("player_0", player)
 
     shop_slice = builder.current_player_schema.get_field_slice("shop")
     shop = obs["tensor"][shop_slice].reshape((5, 32))

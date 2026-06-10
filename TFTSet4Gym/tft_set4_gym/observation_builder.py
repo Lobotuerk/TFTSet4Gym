@@ -25,28 +25,31 @@ ORIGIN_LIST = [
     'tormented', 'cultist', 'divine', 'dusk', 'elderwood',
 ]
 
+# Pre-computed index lookup dictionaries for O(1) access
+COST_INDEX = {name: i - 1 for i, name in enumerate(COST.keys())}
+ITEM_BUILDS_INDEX = {name: i + len(uncraftable_items) for i, name in enumerate(item_builds.keys())}
+UNCRAFTABLE_INDEX = {name: i for i, name in enumerate(uncraftable_items)}
+TRAIT_INDEX = {name: i for i, name in enumerate(TRAIT_LIST)}
+ORIGIN_INDEX = {name: i for i, name in enumerate(ORIGIN_LIST)}
+
 
 def _get_item_index(item_name: str) -> int:
-    """Get the embedding index for an item name."""
-    if item_name in item_builds:
-        return list(item_builds.keys()).index(item_name) + len(uncraftable_items)
-    elif item_name in uncraftable_items:
-        return list(uncraftable_items).index(item_name)
+    """Get the embedding index for an item name using O(1) dict lookup."""
+    if item_name in ITEM_BUILDS_INDEX:
+        return ITEM_BUILDS_INDEX[item_name]
+    if item_name in UNCRAFTABLE_INDEX:
+        return UNCRAFTABLE_INDEX[item_name]
     return 0
 
 
 def _get_trait_index(trait_name: str) -> int:
-    """Get the embedding index for a trait name."""
-    if trait_name in TRAIT_LIST:
-        return TRAIT_LIST.index(trait_name)
-    return 0
+    """Get the embedding index for a trait name using O(1) dict lookup."""
+    return TRAIT_INDEX.get(trait_name, 0)
 
 
 def _get_origin_index(origin_name: str) -> int:
-    """Get the embedding index for an origin name."""
-    if origin_name in ORIGIN_LIST:
-        return ORIGIN_LIST.index(origin_name)
-    return 0
+    """Get the embedding index for an origin name using O(1) dict lookup."""
+    return ORIGIN_INDEX.get(origin_name, 0)
 
 
 class ObservationBuilder:
@@ -64,19 +67,18 @@ class ObservationBuilder:
             'origin_embeddings': (10, 8),
         }
 
-    def build_observation(self, player_id: str, player: Any, shop_vector: Optional[np.ndarray] = None) -> Dict[str, np.ndarray]:
+    def build_observation(self, player_id: str, player: Any) -> Dict[str, np.ndarray]:
         """
         Build a complete observation for a player.
 
         Args:
             player_id: The player identifier
             player: The player object containing state
-            shop_vector: Optional shop vector override
 
         Returns:
             Dictionary containing 'tensor' and 'action_mask' keys
         """
-        tensor_obs = self._build_tensor_observation(player, shop_vector)
+        tensor_obs = self._build_tensor_observation(player)
         action_mask = self._build_action_mask(player)
 
         return {
@@ -129,12 +131,12 @@ class ObservationBuilder:
         return slot
 
     def _get_champion_index(self, champ: Any) -> int:
-        """Get 0-based champion index for embedding lookup."""
+        """Get 0-based champion index for embedding lookup (champion object)."""
         try:
             name = getattr(champ, 'name', None)
-            if name is None or name not in COST:
+            if name is None:
                 return -1
-            return list(COST.keys()).index(name) - 1
+            return COST_INDEX.get(name, -1)
         except (ValueError, AttributeError):
             return -1
 
@@ -184,32 +186,34 @@ class ObservationBuilder:
 
         return bench_items
 
-    def _build_shop(self, player: Any, shop_vector: Optional[np.ndarray] = None) -> tuple:
+    def _build_shop(self, player: Any) -> tuple:
         """Build the shop field: (5, 32) + (1,) chosen index.
 
-        Shop champion embeddings are derived from shop_vector if provided,
-        otherwise from player.shop_elems.
+        Shop champion embeddings are derived directly from player.shop.
         """
         shop = np.zeros((5, 32), dtype=np.float64)
         chosen_idx = 0.0
 
-        if shop_vector is not None:
-            # shop_vector format: [0:58] champion counts, [58] chosen index
-            chosen_idx = shop_vector[58]
-            # Use shop_vector champion counts to build embeddings
-            # The counts indicate which champions are in the shop
-            # We use the shop_elems from player to get the actual champion indices
-            shop_elems = getattr(player, 'shop_elems', np.ones(5, dtype=float) * -1)
-            for i in range(5):
-                if shop_elems[i] >= 0 and shop_elems[i] < 58:
-                    shop[i, 0:32] = shop_elems[i]
-        else:
-            # Fallback: use player.shop_elems directly
-            shop_elems = getattr(player, 'shop_elems', np.ones(5, dtype=float) * -1)
-            chosen_idx = getattr(player, 'shop_chosen_idx', 0.0)
-            for i in range(5):
-                if shop_elems[i] >= 0 and shop_elems[i] < 58:
-                    shop[i, 0:32] = shop_elems[i]
+        shop_items = getattr(player, 'shop', [])
+        for i in range(min(len(shop_items), 5)):
+            champ_name = shop_items[i]
+            if champ_name == " ":
+                continue
+
+            chosen = False
+            if champ_name.endswith("_c"):
+                chosen = True
+                parts = champ_name.split('_')
+                if len(parts) >= 3 and parts[-1] == 'c':
+                    champ_name = parts[0]
+                else:
+                    champ_name = champ_name[:-2]
+
+            champ_idx = COST_INDEX.get(champ_name, -1)
+            if 0 <= champ_idx < 58:
+                shop[i, 0:32] = champ_idx
+            if chosen:
+                chosen_idx = float(i + 1)
 
         return shop, chosen_idx
 
@@ -350,7 +354,7 @@ class ObservationBuilder:
 
         return opponent_info
 
-    def _build_tensor_observation(self, player: Any, shop_vector: Optional[np.ndarray] = None) -> np.ndarray:
+    def _build_tensor_observation(self, player: Any) -> np.ndarray:
         """Build the main tensor observation by reading player properties directly."""
         schema = self.current_player_schema
         observation = np.zeros(schema.total_size, dtype=np.float64)
@@ -387,7 +391,7 @@ class ObservationBuilder:
         set_field("bench_items", self._build_bench_items(player))
 
         # 4. Shop
-        shop, chosen_idx = self._build_shop(player, shop_vector)
+        shop, chosen_idx = self._build_shop(player)
         set_field("shop", shop)
         set_field("shop_chosen", chosen_idx)
 
@@ -407,17 +411,15 @@ class ObservationBuilder:
 
         return observation
 
-    def build_full_observation(self, player_id: str, player: Any, players: Dict[str, Any],
-                                shop_vector: Optional[np.ndarray] = None) -> Dict[str, np.ndarray]:
+    def build_full_observation(self, player_id: str, player: Any, players: Dict[str, Any]) -> Dict[str, np.ndarray]:
         """Build a complete observation including opponent data.
 
         Args:
             player_id: The current player identifier
             player: The current player object
             players: Dict of all player objects keyed by player_id
-            shop_vector: Optional shop vector override
         """
-        tensor_obs = self._build_tensor_observation(player, shop_vector)
+        tensor_obs = self._build_tensor_observation(player)
 
         # Fill in opponent data
         schema = self.current_player_schema
@@ -489,10 +491,10 @@ def update_config_observation_size():
 
 
 # Convenience functions for backward compatibility
-def build_observation(player_id: str, player: Any, shop_vector: Optional[np.ndarray] = None) -> Dict[str, np.ndarray]:
+def build_observation(player_id: str, player: Any) -> Dict[str, np.ndarray]:
     """Convenience function to build observation."""
     builder = ObservationBuilder()
-    return builder.build_observation(player_id, player, shop_vector)
+    return builder.build_observation(player_id, player)
 
 
 def get_field_slice(field_name: str) -> slice:

@@ -3,6 +3,9 @@ import numpy as np
 from . import champion as champion
 from .stats import COST
 
+# Pre-computed champion name to index mapping
+COST_INDEX = {name: i - 1 for i, name in enumerate(COST.keys())}
+
 """
 Description - Object used for the simulation to interact with the environment. The agent passes in actions and those 
               actions take effect in this object.
@@ -25,9 +28,22 @@ class Step_Function:
     Inputs      - player: Player object
                     Any alive player.
     """
+    def _update_shop_elems(self, player):
+        """Update player.shop_elems from player.shop (used by batch_shop)."""
+        shop_elems = np.ones(5) * -1
+        for i, champ_name in enumerate(getattr(player, 'shop', [])):
+            if champ_name == " ":
+                continue
+            if champ_name.endswith("_c"):
+                parts = champ_name.split('_')
+                champ_name = parts[0] if len(parts) >= 3 and parts[-1] == 'c' else champ_name[:-2]
+            shop_elems[i] = COST_INDEX.get(champ_name, -1)
+        player.shop_elems = shop_elems
+
     def generate_shop(self, key, player):
         self.shops[key] = self.pool_obj.sample(player, 5)
-        self.observation_objs[key].generate_shop_vector(self.shops[key], player)
+        player.shop = self.shops[key]
+        self._update_shop_elems(player)
 
 
     """
@@ -39,17 +55,8 @@ class Step_Function:
         for player_id, player in players.items():
             if player:
                 self.shops[player_id] = self.pool_obj.sample(player, 5)
-        self.generate_shop_vectors(players)
-
-    """
-    Description - Method used for generating a new shop vector for the observation for all players
-    Inputs      - players: Dictionary of player objects
-                    All of the players in the game. Currently both alive or dead.
-    """
-    def generate_shop_vectors(self, players):
-        for player_id, player in players.items():
-            if player:
-                self.observation_objs[player_id].generate_shop_vector(self.shops[player_id], player)
+                player.shop = self.shops[player_id]
+                self._update_shop_elems(player)
 
     """
     Description - Calculates the 2 dimensional position in the board, from the 1 dimensional position on the list
@@ -185,7 +192,8 @@ class Step_Function:
         success = player.buy_champion(a_champion)
         if success:
             self.shops[player_id][champ_index] = " "
-            game_observation.generate_shop_vector(self.shops[player_id], player)
+            player.shop = self.shops[player_id]
+            self._update_shop_elems(player)
         else:
             # I get that this does nothing, but it tells whoever writes in this method next that there should be
             # Nothing that follows this line.

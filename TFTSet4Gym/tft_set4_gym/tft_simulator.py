@@ -93,7 +93,6 @@ class TFT_Simulator(ParallelEnv):
         self.game_round.play_game_round()
         for key, p in self.PLAYERS.items():
             self.step_function.generate_shop(key, p)
-        self.step_function.generate_shop_vectors(self.PLAYERS)
 
         self.possible_agents = ["player_" + str(r) for r in range(config.NUM_PLAYERS)]
         self.agents = self.possible_agents[:]
@@ -199,7 +198,6 @@ class TFT_Simulator(ParallelEnv):
         self.game_round.play_game_round()
         for key, p in self.PLAYERS.items():
             self.step_function.generate_shop(key, p)
-        self.step_function.generate_shop_vectors(self.PLAYERS)
 
         self.agents = self.possible_agents.copy()
 
