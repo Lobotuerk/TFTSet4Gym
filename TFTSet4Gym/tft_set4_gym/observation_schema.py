@@ -81,42 +81,48 @@ class ObservationSchemaRegistry:
     
     def _setup_default_schemas(self):
         """Setup the default TFT observation schemas."""
-        
-        # Current player observation schema
-        # Board fields retain spatial (4, 7) dimensions since position matters.
-        # Bench, shop, and scalar fields are flattened (no spatial redundancy).
+
+        # New embedding-based observation schema
+        # Total: 28,946 dimensions
+        # Embedding tables: Champions(58x32), Items(37x24), Traits(20x8), Origins(10x8)
         current_player_fields = [
-            # Board representation (58 champions, 4x7 grid)
-            ObservationField("board_champions", (58, 4, 7), np.dtype('float64'), "Champion positions on board"),
-            ObservationField("board_stars", (1, 4, 7), np.dtype('float64'), "Star levels of champions on board"),
-            ObservationField("board_chosen", (1, 4, 7), np.dtype('float64'), "Chosen status of champions on board"),
-            
-            # Bench representation (58 possible champions, flattened)
-            ObservationField("bench_champions", (58,), np.dtype('float64'), "Champions on bench by type"),
-            
-            # Player state (scalars, flattened)
-            ObservationField("health", (1,), np.dtype('float64'), "Player health"),
-            ObservationField("turns_for_combat", (1,), np.dtype('float64'), "Remaining action turns"),
-            ObservationField("level", (1,), np.dtype('float64'), "Player level"),
-            ObservationField("round", (1,), np.dtype('float64'), "Current round number"),
-            
-            # Private information (scalars, flattened)
-            ObservationField("exp_to_level", (1,), np.dtype('float64'), "Experience needed to level"),
-            ObservationField("gold", (1,), np.dtype('float64'), "Current gold amount"),
-            ObservationField("streak", (1,), np.dtype('float64'), "Win/loss streak"),
-            
-            # Shop information (flattened)
-            ObservationField("shop_champions", (58,), np.dtype('float64'), "Available champions in shop"),
-            ObservationField("shop_chosen", (1,), np.dtype('float64'), "Chosen champion in shop"),
+            # Board: 28 slots (4x7 grid), each with per-champion encoding (122 dims)
+            # Per slot: champion(32) + item1(24) + item2(24) + item3(24) + traits(8) + origins(8) + star(1) + chosen(1)
+            ObservationField("board", (28, 122), np.dtype('float64'), "Board slots with embedded champion, items, traits, origins"),
+
+            # Bench champions: 9 slots, same per-champion encoding as board
+            ObservationField("bench_champions", (9, 122), np.dtype('float64'), "Bench champion slots with embedded features"),
+
+            # Bench items: 10 slots, item embeddings
+            ObservationField("bench_items", (10, 24), np.dtype('float64'), "Item bench slots with item embeddings"),
+
+            # Shop: 5 champion slots (32-dim embeddings) + chosen index scalar
+            ObservationField("shop", (5, 32), np.dtype('float64'), "Shop champion embeddings"),
+            ObservationField("shop_chosen", (1,), np.dtype('float64'), "Chosen champion index in shop"),
+
+            # Team traits: 1 normalized float per trait (tier / max_tier)
+            ObservationField("team_traits", (20,), np.dtype('float64'), "Normalized trait tier activation (tier/max_tier)"),
+
+            # Team origins: 1 normalized float per origin (tier / max_tier)
+            ObservationField("team_origins", (10,), np.dtype('float64'), "Normalized origin tier activation (tier/max_tier)"),
+
+            # Player state: [health, gold, level, round, exp_to_level, streak, turns_for_combat]
+            ObservationField("player_state", (7,), np.dtype('float64'), "Player state scalars"),
+
+            # Opponent boards: 7 opponents x 28 slots x 122 dims
+            ObservationField("opponent_boards", (7, 28, 122), np.dtype('float64'), "Opponent board states"),
+
+            # Opponent info: 7 opponents x [health, gold, level, streak]
+            ObservationField("opponent_info", (7, 4), np.dtype('float64'), "Opponent public state"),
         ]
-        
+
         self.register_schema("current_player", ObservationSchema(current_player_fields))
-        
+
         # Action mask schema
         action_mask_fields = [
             ObservationField("valid_actions", (54,), np.dtype('int8'), "Mask for valid actions")
         ]
-        
+
         self.register_schema("action_mask", ObservationSchema(action_mask_fields))
     
     def register_schema(self, name: str, schema: ObservationSchema):
