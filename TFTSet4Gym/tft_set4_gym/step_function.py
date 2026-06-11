@@ -140,16 +140,16 @@ class Step_Function:
                         else:
                             player.move_board_to_bench(x1, y1)
                         # game_observations[key].generate_game_comps_vector()
-            # elif action_selector == 6:
-            #     # Place item on champ
-            #     item_selector = param1 % 10
-            #     move_loc = param2 % 37
-            #     if move_loc >= 28:
-            #         move_loc -= 28
-            #         player.move_item_to_bench(item_selector, move_loc)
-            #     else:
-            #         x, y = self.dcord_to_2dcord(move_loc)
-            #         player.move_item_to_board(item_selector, x, y)
+            elif action_selector == 6:
+                # Place item on champ
+                item_selector = param1 % 10
+                move_loc = param2 % 37
+                if move_loc >= 28:
+                    move_loc -= 28
+                    player.move_item_to_bench(item_selector, move_loc)
+                else:
+                    x, y = self.dcord_to_2dcord(move_loc)
+                    player.move_item_to_board(item_selector, x, y)
             elif action_selector == 3:
                 # Sell Champ
                 target_1 = param1
