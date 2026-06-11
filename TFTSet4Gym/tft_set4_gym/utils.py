@@ -4,14 +4,27 @@ from functools import wraps
 from time import time
 from .stats import COST
 
-# Schema-based field access functions
+
+def _get_player_state_value(observation, index):
+    """Extract a value from the player_state field in a flat observation."""
+    from .observation_builder import get_field_value_from_obs
+    player_state = get_field_value_from_obs(observation, 'player_state')
+    return float(player_state.flat[index])
+
+
+def _get_champion_name(champion_index):
+    idx = int(round(champion_index))
+    if 0 <= idx + 1 < len(COST.keys()):
+        return list(COST.keys())[idx + 1]
+    return None
+
+
 def get_field_indices_safe(field_name, default_start=0, default_end=1):
     """Get field indices with fallback for backward compatibility."""
     try:
         from .observation_schema import get_field_indices
         return get_field_indices(field_name)
     except (ImportError, KeyError):
-        # Fallback to hardcoded values if schema not available
         hardcoded_map = {
             'health': (60 + 58, 60 + 58 + 1),
             'round': (60 + 58 + 1 + 1 + 1, 60 + 58 + 1 + 1 + 1 + 1),
@@ -24,7 +37,6 @@ def get_field_indices_safe(field_name, default_start=0, default_end=1):
             'shop_chosen': (60 + 58 + 1 + 1 + 1 + 1 + 58, 60 + 58 + 1 + 1 + 1 + 1 + 59)
         }
         return hardcoded_map.get(field_name, (default_start, default_end))
-
 
 
 def champ_binary_encode(n):
@@ -57,7 +69,6 @@ def timed(f):
         elapsed = time() - start
         print(f'{f.__name__} took {elapsed} seconds to finish')
         return result
-
     return wrapper
 
 
@@ -78,7 +89,8 @@ def x_y_to_1d_coord(x1, y1):
         return x1 + 28
     else:
         return 7 * y1 + x1
-    
+
+
 def player_map_from_obs(observation):
     player_map = {}
     player_map["gold"] = gold_from_obs(observation)
@@ -93,78 +105,101 @@ def player_map_from_obs(observation):
     player_map['streak'] = streak_from_obs(observation)
     return player_map
 
+
 def streak_from_obs(observation):
-    start, end = get_field_indices_safe('streak', 60 + 58 + 1 + 1 + 1 + 1 + 61, 60 + 58 + 1 + 1 + 1 + 1 + 62)
-    return observation[start][0][0]
-    
+    return _get_player_state_value(observation, 5)
+
+
 def gold_from_obs(observation):
-    start, end = get_field_indices_safe('gold', 60 + 58 + 1 + 1 + 1 + 1 + 60, 60 + 58 + 1 + 1 + 1 + 1 + 61)
-    return observation[start][0][0]
+    return _get_player_state_value(observation, 1)
+
 
 def exp_to_level_from_obs(observation):
-    start, end = get_field_indices_safe('exp_to_level', 60 + 58 + 1 + 1 + 1 + 1 + 59, 60 + 58 + 1 + 1 + 1 + 1 + 60)
-    return observation[start][0][0]
+    return _get_player_state_value(observation, 4)
+
 
 def hp_from_obs(observation):
-    start, end = get_field_indices_safe('health', 60 + 58, 60 + 58 + 1)
-    return observation[start][0][0]
+    return _get_player_state_value(observation, 0)
+
 
 def round_from_obs(observation):
-    start, end = get_field_indices_safe('round', 60 + 58 + 1 + 1 + 1, 60 + 58 + 1 + 1 + 1 + 1)
-    return observation[start][0][0]
+    return _get_player_state_value(observation, 3)
+
 
 def t_f_c_from_obs(observation):
-    start, end = get_field_indices_safe('turns_for_combat', 60 + 58 + 1, 60 + 58 + 1 + 1)
-    return observation[start][0][0]
+    return _get_player_state_value(observation, 6)
+
 
 def units_in_shop_from_obs(observation):
-    shop_start, shop_end = get_field_indices_safe('shop_champions', 60 + 58 + 1 + 1 + 1 + 1, 60 + 58 + 1 + 1 + 1 + 1 + 58)
-    chosen_start, chosen_end = get_field_indices_safe('shop_chosen', 60 + 58 + 1 + 1 + 1 + 1 + 58, 60 + 58 + 1 + 1 + 1 + 1 + 59)
-    
-    units = observation[shop_start:shop_end, 0, 0]
-    chosen = observation[chosen_start][0][0]
-    if int(chosen) > 0:
-        chosen = list(COST.keys())[int(chosen)+1] + "_chosen"
-    else:
-        chosen = ""
+    from .observation_builder import get_field_value_from_obs
+    shop = get_field_value_from_obs(observation, 'shop')
+    chosen_field = get_field_value_from_obs(observation, 'shop_chosen')
+
+    chosen_idx = int(round(chosen_field.flat[0])) if chosen_field.size > 0 else 0
+
     parsed_units = []
-    for i, count in enumerate(units):
-        if count > 0:
-            for _ in range(int(count)):
-                parsed_units.append(list(COST.keys())[i+1])
+    chosen = ""
+    for slot in range(min(5, shop.shape[0])):
+        champion_index = shop[slot, 0]
+        if champion_index <= 0:
+            continue
+        champion_name = _get_champion_name(champion_index)
+        if champion_name is None:
+            continue
+        if chosen_idx == slot + 1:
+            chosen = champion_name + "_chosen"
+        parsed_units.append(champion_name)
     return parsed_units, chosen
 
+
 def board_from_obs(observation):
-    board = observation[0:58]
-    stars = observation[58]
-    chosen = observation[59]
+    from .observation_builder import get_field_value_from_obs
+    board = get_field_value_from_obs(observation, 'board')
     champs = []
-    for i, unit_board in enumerate(board):
-        indexes = np.where(unit_board == 1.0)
-        if not len(indexes[0]) == 0:
-            # print(list(COST.keys())[i+1], indexes[0], indexes[1], stars[indexes[0], indexes[1]], chosen[indexes[0], indexes[1]])
-            champ = {"name":list(COST.keys())[i+1],
-                     "id": i,
-                     "pos_y": indexes[0][0],
-                     "pos_x": indexes[1][0],
-                     "stars": stars[indexes[0], indexes[1]][0],
-                     "chosen": chosen[indexes[0], indexes[1]][0] > 0.}
-            # print(champ)
-            champs.append(champ)
+    if board.ndim != 2 or board.shape[0] != 28 or board.shape[1] != 122:
+        return champs
+
+    for slot_idx in range(28):
+        champion_index = board[slot_idx, 0]
+        if champion_index <= 0:
+            continue
+        champion_name = _get_champion_name(champion_index)
+        if champion_name is None:
+            continue
+        champ = {
+            "name": champion_name,
+            "id": int(round(champion_index)),
+            "pos_y": slot_idx % 4,
+            "pos_x": slot_idx // 4,
+            "stars": int(round(board[slot_idx, 120])),
+            "chosen": board[slot_idx, 121] > 0.5
+        }
+        champs.append(champ)
     return champs
 
+
 def bench_from_obs(observation):
+    from .observation_builder import get_field_value_from_obs
+    bench = get_field_value_from_obs(observation, 'bench_champions')
     bench_list = []
-    bench = observation[60:60+58, 0, 0]
-    for i,n in enumerate(bench):
-        if n > 0:
-            for _ in range(int(n)):
-                bench_list.append(list(COST.keys())[i+1])
+    if bench.ndim != 2 or bench.shape[1] != 122:
+        return bench_list
+    for slot_idx in range(bench.shape[0]):
+        champion_index = bench[slot_idx, 0]
+        if champion_index <= 0:
+            continue
+        champion_name = _get_champion_name(champion_index)
+        if champion_name is None:
+            continue
+        count = max(1, int(round(bench[slot_idx, 120])))
+        for _ in range(count):
+            bench_list.append(champion_name)
     return bench_list
+
 
 def champ_id_from_name(champ_name):
     return (list(COST.keys()).index(champ_name)) - 1
 
+
 def level_from_obs(observation):
-    start, end = get_field_indices_safe('level', 60 + 58 + 1 + 1, 60 + 58 + 1 + 1 + 1)
-    return observation[start][0][0]
+    return _get_player_state_value(observation, 2)
