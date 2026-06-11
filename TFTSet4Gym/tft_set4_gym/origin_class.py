@@ -207,8 +207,7 @@ def cultist(champion, team):
 
     current_spawn_hex = current_spawn_hex[0]
 
-    champion.spawn('galio', galio_stars, current_spawn_hex[0], current_spawn_hex[1], team=team)
-    galio = list(filter(lambda x: x.name == 'galio', champion.own_team()))[0]
+    galio = champion.spawn('galio', galio_stars, current_spawn_hex[0], current_spawn_hex[1], team=team)
     galio.print(' spawns')
     entry_range = stats.ABILITY_SECONDARY_RADIUS['galio'][galio.stars]
 
