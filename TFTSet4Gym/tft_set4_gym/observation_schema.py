@@ -120,7 +120,7 @@ class ObservationSchemaRegistry:
 
         # Action mask schema
         action_mask_fields = [
-            ObservationField("valid_actions", (54,), np.dtype('int8'), "Mask for valid actions")
+            ObservationField("valid_actions", (81,), np.dtype('int8'), "Mask for valid actions")
         ]
 
         self.register_schema("action_mask", ObservationSchema(action_mask_fields))

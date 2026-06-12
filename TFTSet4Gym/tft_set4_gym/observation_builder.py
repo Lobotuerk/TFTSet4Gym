@@ -441,13 +441,91 @@ class ObservationBuilder:
         }
 
     def _build_action_mask(self, player: Any) -> np.ndarray:
-        """Build action mask based on player state."""
-        mask_size = self.action_mask_schema.total_size
-        action_mask = np.ones(mask_size, dtype=np.int8)
+        """Build state-aware action mask based on player state.
 
-        if hasattr(player, 'shop_mask') and player.shop_mask is not None:
-            shop_size = min(len(player.shop_mask), mask_size)
-            action_mask[:shop_size] = player.shop_mask[:shop_size]
+        Mask layout (81 bits total):
+        - Bits   0-6:   Action type validity (7 selectors)
+        - Bits   7-43:  Param1 validity (37 positions)
+        - Bits  44-80:  Param2 validity (37 positions)
+        """
+        mask_size = self.action_mask_schema.total_size
+        action_mask = np.zeros(mask_size, dtype=np.int8)
+
+        board_occupied = np.zeros(28, dtype=bool)
+        try:
+            for x in range(7):
+                for y in range(4):
+                    idx = x * 4 + y
+                    if player.board[x][y]:
+                        board_occupied[idx] = True
+        except Exception:
+            pass
+
+        bench_occupied = np.zeros(9, dtype=bool)
+        try:
+            for i in range(min(len(player.bench), 9)):
+                if player.bench[i]:
+                    bench_occupied[i] = True
+        except Exception:
+            pass
+
+        has_any_unit = bool(np.any(board_occupied)) or bool(np.any(bench_occupied))
+
+        has_shop_champs = False
+        shop_available = np.zeros(5, dtype=bool)
+        try:
+            shop = getattr(player, 'shop', [])
+            for i in range(min(len(shop), 5)):
+                if shop[i] and shop[i] != " ":
+                    shop_available[i] = True
+                    has_shop_champs = True
+        except Exception:
+            pass
+
+        has_items = False
+        items_on_bench = np.zeros(10, dtype=bool)
+        try:
+            for i in range(min(len(player.item_bench), 10)):
+                if player.item_bench[i]:
+                    items_on_bench[i] = True
+                    has_items = True
+        except Exception:
+            pass
+
+        gold = getattr(player, 'gold', 0)
+        refresh_cost = getattr(player, 'refresh_cost', 2)
+        exp_cost = getattr(player, 'exp_cost', 4)
+        level = getattr(player, 'level', 1)
+        max_level = getattr(player, 'max_level', 9)
+
+        # Action type mask (7 bits, indices 0-6)
+        action_mask[0] = 1  # Pass - always valid
+        action_mask[1] = 1 if has_any_unit else 0  # Move
+        action_mask[2] = 1 if has_shop_champs else 0  # Buy
+        action_mask[3] = 1 if has_any_unit else 0  # Sell
+        action_mask[4] = 1 if gold >= refresh_cost else 0  # Reroll
+        action_mask[5] = 1 if (gold >= exp_cost and level < max_level) else 0  # Level
+        action_mask[6] = 1 if has_items else 0  # Item placement
+
+        # Param1 mask (37 bits, indices 7-43)
+        # Board positions (0-27): occupied by a champion
+        for i in range(28):
+            action_mask[7 + i] = 1 if board_occupied[i] else 0
+        # Bench positions (28-36): occupied by a champion
+        for i in range(9):
+            action_mask[7 + 28 + i] = 1 if bench_occupied[i] else 0
+        # Shop slots (0-4): available for buy
+        for i in range(5):
+            if shop_available[i]:
+                action_mask[7 + i] = 1
+        # Item bench slots (0-9): available for item placement
+        for i in range(10):
+            if items_on_bench[i]:
+                action_mask[7 + i] = 1
+
+        # Param2 mask (37 bits, indices 44-80)
+        # All positions are potentially valid destinations for move/item actions
+        action_mask[44:] = 1
 
         return action_mask
 
