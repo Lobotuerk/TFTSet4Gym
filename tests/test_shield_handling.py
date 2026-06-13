@@ -84,6 +84,38 @@ def test_spell_shield_depletion_no_index_error():
     assert target.shield_amount() == 0
 
 
+def test_attack_exact_shield_depletion():
+    """
+    Test that when damage exactly equals the shield amount,
+    the shield is consumed and removed without IndexError.
+    This targets the edge case where shield amount becomes 0
+    after subtraction (not negative), which previously could
+    leave a zero-amount shield in the list.
+    """
+    reset_global_variables()
+    state = get_state()
+
+    attacker = champion("zilean", team="blue", y=0, x=0, stars=1)
+    target = champion("zilean", team="red", y=0, x=1, stars=1)
+
+    state.blue.append(attacker)
+    state.red.append(target)
+
+    attacker.crit_chance = 0
+    target.dodge = 0
+
+    target.shields = [{'amount': 50, 'original_amount': 50, 'applier': attacker, 'identifier': 'test_shield'}]
+    target.health = 500
+    target.max_health = 500
+    target.armor = 0
+    attacker.AD = 50
+
+    attacker.attack(target=target)
+
+    assert len(target.shields) == 0
+    assert target.shield_amount() == 0
+
+
 def test_multiple_shields_cascade():
     """
     Test that damage cascades across multiple shields and removes them appropriately.

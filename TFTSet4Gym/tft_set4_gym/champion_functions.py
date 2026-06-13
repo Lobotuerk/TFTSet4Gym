@@ -166,13 +166,14 @@ def attack(champion, target, bonus_dmg=0, item_attack=False, trait_attack='', se
                 shield_old = target.shield_amount()
 
                 while damage > 0 and target.shield_amount() > 0 and len(target.shields) > 0:
-                    top_shield = target.shields[0]['amount']
-                    target.shields[0]['amount'] -= damage
-                    if target.shields[0]['amount'] < 0:
-                        damage -= top_shield
-                        target.shields = target.shields[1:]
-                    else:
+                    top_shield_ref = target.shields[0]
+                    shield_amount = top_shield_ref['amount']
+                    if shield_amount > damage:
+                        top_shield_ref['amount'] -= damage
                         damage = 0
+                    else:
+                        damage -= shield_amount
+                        target.shields.pop(0)
 
                 # kalista is programmed to add a new spear -->
                 # and pull the spears IF spears_in_target * spear_dmg_after_MR + auto_dmg_after_armor >
