@@ -106,8 +106,8 @@ class Step_Function:
                 param1 = 0
                 param2 = 0
 
-            # action format = 0:7 (action_selector),
-            # 7:44 (champ_loc_target), 44:54 (item_loc_target)
+            # action format = 0:8 (action_selector),
+            # 8:45 (champ_loc_target), 45:55 (item_loc_target)
             
             # game_observations[key].generate_other_player_vectors(player, players)
             if action_selector == 0:
@@ -158,7 +158,9 @@ class Step_Function:
                     if player.board[x][y]:
                         player.sell_champion(player.board[x][y], field=True)
                 else:
-                    player.sell_from_bench(target_1 - 28)
+                    bench_loc = target_1 - 28
+                    if 0 <= bench_loc < 9 and player.bench[bench_loc]:
+                        player.sell_from_bench(bench_loc)
             elif action_selector == 5:
                 # Buy EXP
                 player.buy_exp()
