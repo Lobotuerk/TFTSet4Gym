@@ -107,7 +107,7 @@ class Step_Function:
                 param2 = 0
 
             # action format = 0:7 (action_selector),
-            # 7:44 (champ_loc_target), 44:54 (item_loc_target)
+            # 7:44 (champ_loc_target), 44:81 (item_loc_target)
             
             # game_observations[key].generate_other_player_vectors(player, players)
             if action_selector == 0:
@@ -143,7 +143,7 @@ class Step_Function:
             elif action_selector == 6:
                 # Place item on champ
                 item_selector = param1 % 10
-                move_loc = param2 % 37
+                move_loc = param2
                 if move_loc >= 28:
                     move_loc -= 28
                     player.move_item_to_bench(item_selector, move_loc)

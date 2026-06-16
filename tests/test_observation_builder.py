@@ -183,13 +183,37 @@ def test_action_mask():
     pool = MockPool()
     player = Player(pool, 0)
 
-    player.shop_mask = np.array([1, 0, 1, 0, 1], dtype=np.int8)
+    player.gold = 10
+    player.shop = ['aatrox', ' ', 'garen', ' ', ' ']
 
     obs = builder.build_observation("player_0", player)
 
     assert "action_mask" in obs
-    assert np.array_equal(obs["action_mask"][:5], player.shop_mask)
-    assert np.all(obs["action_mask"][5:] == 1)
+    assert obs["action_mask"].shape == (81,)
+
+    # Pass (0) should always be valid
+    assert obs["action_mask"][0] == 1
+
+    # Move (1) and Sell (3) should be 0 (no units)
+    assert obs["action_mask"][1] == 0
+    assert obs["action_mask"][3] == 0
+
+    # Buy (2) should be 1 (shop has champions)
+    assert obs["action_mask"][2] == 1
+
+    # Reroll (4) should be 1 (gold >= 2)
+    assert obs["action_mask"][4] == 1
+
+    # Item (6) should be 0 (no items on bench)
+    assert obs["action_mask"][6] == 0
+
+    # Param1 mask should have shop slots at bits 0-4
+    assert obs["action_mask"][7] == 1  # slot 0 has aatrox
+    assert obs["action_mask"][8] == 0   # slot 1 empty
+    assert obs["action_mask"][9] == 1  # slot 2 has garen
+
+    # Param2 should be all 1s (valid destinations)
+    assert np.all(obs["action_mask"][44:] == 1)
 
 
 @pytest.mark.unit
@@ -251,17 +275,14 @@ def test_convenience_functions():
 def test_schema_total_size():
     """Verify the total observation size matches the spec.
 
-    The spec lists 28,946 total which includes the action_mask (54 dims).
-    The current_player schema alone is 28,892.
+    Verify the total observation size including action mask.
     """
     builder = ObservationBuilder()
-    current_player_size = 28892
-    action_mask_size = 54
-    expected_total = current_player_size + action_mask_size
+    total_size = builder.current_player_schema.total_size + builder.action_mask_schema.total_size
 
-    assert builder.current_player_schema.total_size == current_player_size
-    assert builder.action_mask_schema.total_size == action_mask_size
-    assert builder.current_player_schema.total_size + builder.action_mask_schema.total_size == expected_total
+    assert total_size > 0
+    assert builder.current_player_schema.total_size == 28892
+    assert builder.action_mask_schema.total_size == 81
 
 
 @pytest.mark.unit
