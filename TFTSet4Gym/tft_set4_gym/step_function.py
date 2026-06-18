@@ -135,7 +135,7 @@ class Step_Function:
                     else:
                         x1, y1 = self.dcord_to_2dcord(swap_loc_from)
                         bench_loc = swap_loc_to - 28
-                        if player.bench[bench_loc]:
+                        if 0 <= bench_loc < 9 and player.bench[bench_loc]:
                             player.move_bench_to_board(bench_loc, x1, y1)
                         else:
                             player.move_board_to_bench(x1, y1)
